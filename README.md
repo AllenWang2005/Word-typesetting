@@ -7,8 +7,9 @@ This repository packages a reusable Codex skill that applies a consistent Word/D
 ## What This Skill Covers
 
 - Chinese body text in Songti/SimSun and English/numbers in Times New Roman
-- Real Word heading styles and outline levels for navigation and automatic TOC
-- White three-line tables without full grids or vertical lines
+- Left-aligned Word heading styles and outline levels for navigation and automatic TOC
+- Left-aligned abstract/keywords, black body text, and centered figure/table captions
+- White three-line tables without full grids or vertical lines, with nonconforming original tables normalized
 - Native Word OMML formulas with correct italic/upright rules
 - Superscript, field-backed reference citations linked to bibliography entries
 - Consistent figure/table captions and numbering
@@ -23,7 +24,8 @@ This repository packages a reusable Codex skill that applies a consistent Word/D
 ├── agents/
 │   └── openai.yaml
 └── references/
-    └── formatting-standard.md
+    ├── formatting-standard.md
+    └── citation-crossrefs-ooxml.md
 ```
 
 ## Install
