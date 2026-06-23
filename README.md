@@ -10,6 +10,7 @@ This repository packages a reusable Codex skill that applies a consistent Word/D
 - Real Word heading styles and outline levels for navigation and automatic TOC
 - White three-line tables without full grids or vertical lines
 - Native Word OMML formulas with correct italic/upright rules
+- Superscript, field-backed reference citations linked to bibliography entries
 - Consistent figure/table captions and numbering
 - Appendix code blocks with red comments
 - Pre-delivery checks for layout, formulas, tables, figures, and code appendices

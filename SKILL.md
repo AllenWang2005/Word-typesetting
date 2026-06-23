@@ -1,13 +1,13 @@
 ---
 name: word-report-formatting
-description: Apply Allen's formal Chinese Word report formatting standard. Use when creating, editing, reviewing, or finalizing Word/DOCX reports, course designs, internship reports, thesis-style documents, scientific/engineering reports, formulas, three-line tables, figure/table captions, or appendices with code comments.
+description: Apply Allen's formal Chinese Word report formatting standard. Use when creating, editing, reviewing, or finalizing Word/DOCX reports, course designs, internship reports, thesis-style documents, scientific/engineering reports, formulas, three-line tables, figure/table captions, reference/citation cross-references, or appendices with code comments.
 ---
 
 # Word Report Formatting
 
 ## Overview
 
-Use this skill to format formal Chinese Word reports consistently with Allen's preferred standard. It complements the general DOCX/document skill: use the document tooling for implementation and rendering, and use this skill for the required typography, formula, table, figure, and appendix-code rules.
+Use this skill to format formal Chinese Word reports consistently with Allen's preferred standard. It complements the general DOCX/document skill: use the document tooling for implementation and rendering, and use this skill for the required typography, formula, table, figure, reference/citation, and appendix-code rules.
 
 ## Required Workflow
 
@@ -15,8 +15,9 @@ Use this skill to format formal Chinese Word reports consistently with Allen's p
 2. Apply the standard unless the user, school template, or provided rubric explicitly overrides it.
 3. Preserve existing document content and structure during edit tasks; make only the local formatting changes needed.
 4. For formulas, inspect the actual OMML/Word equation formatting rather than judging from plain text extraction.
-5. Before delivery, run a formatting audit against the checklist in `references/formatting-standard.md`.
-6. When possible, render/export the DOCX to PDF or page images and inspect pages for overlap, clipping, table overflow, font substitution, and appendix code readability.
+5. For paper-style citations, convert body citations such as `[1]`, `[1][2]`, `[1,2]`, or `[1-3]` into superscript Word cross-references to the matching bibliography entries.
+6. Before delivery, run a formatting audit against the checklist in `references/formatting-standard.md`.
+7. When possible, render/export the DOCX to PDF or page images and inspect pages for overlap, clipping, table overflow, font substitution, broken cross-references, and appendix code readability.
 
 ## Core Rules
 
@@ -25,6 +26,7 @@ Use this skill to format formal Chinese Word reports consistently with Allen's p
 - Tables: default to white three-line tables, with no fill, no vertical lines, and no full grid.
 - Formulas: use native Word OMML equations. Variables are italic; digits, operators, units, function names, constants, explanatory text, and explanatory subscripts are upright.
 - Figures: keep plot titles out of the image when a Word caption is present; use consistent figure numbering and captions.
+- Citations: make body references superscript and field-backed, not merely static superscript text.
 - Appendix code: put code after main text and tables; color code comments red, preferably `C00000`.
 
 ## Conflict Handling
