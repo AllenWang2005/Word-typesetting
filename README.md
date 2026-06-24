@@ -7,14 +7,15 @@ This repository packages a reusable Codex skill that applies a consistent Word/D
 ## What This Skill Covers
 
 - Chinese body text in Songti/SimSun and English/numbers in Times New Roman
+- Dominant-language punctuation normalization for Chinese or English documents, while preserving English punctuation inside English phrases, URLs, formulas, code, decimals, and citation brackets
 - Left-aligned Word heading styles and outline levels for navigation and automatic TOC
 - Left-aligned abstract/keywords, black body text, and centered figure/table captions
-- White three-line tables without full grids or vertical lines, with nonconforming original tables normalized
+- White three-line tables without full grids or vertical lines, with table text at small-four/12 pt and nonconforming original tables normalized
 - Native Word OMML formulas with correct italic/upright rules
 - Superscript, field-backed reference citations linked to bibliography entries
 - Consistent figure/table captions and numbering
 - Appendix code blocks with red comments
-- Pre-delivery checks for layout, formulas, tables, figures, and code appendices
+- Pre-delivery checks for layout, punctuation, formulas, tables, figures, citations, and code appendices
 
 ## Repository Structure
 
@@ -23,9 +24,11 @@ This repository packages a reusable Codex skill that applies a consistent Word/D
 ├── SKILL.md
 ├── agents/
 │   └── openai.yaml
-└── references/
+├── references/
     ├── formatting-standard.md
     └── citation-crossrefs-ooxml.md
+└── scripts/
+    └── audit_docx_format.py
 ```
 
 ## Install
@@ -67,9 +70,18 @@ Variables are italic. Digits, operators, units, function names, constants,
 explanatory text, and explanatory subscripts are upright.
 ```
 
+For DOCX edits, the skill can run a lightweight audit after formatting:
+
+```text
+python scripts/audit_docx_format.py path/to/report.docx
+```
+
+The script flags common failures such as punctuation mismatches, abstract/keyword indentation, centered level-1 headings, direct non-12 pt table text, non-ASCII citation brackets, and missing `REF ref_###` citation fields.
+
 ## Maintenance Notes
 
 - Keep `SKILL.md` concise so it loads quickly when the skill triggers.
 - Put detailed formatting rules in `references/formatting-standard.md`.
+- Keep `scripts/audit_docx_format.py` conservative: use `FAIL` only for machine-checkable violations and `WARN` for items that require visual review.
 - Do not store private information, credentials, or one-off chat history in this repository.
 - When the formatting standard changes, update both `references/formatting-standard.md` and the short summary in `SKILL.md` if needed.

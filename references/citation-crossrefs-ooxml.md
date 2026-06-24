@@ -11,7 +11,7 @@ Use this guide whenever a DOCX contains paper-style body citations such as `[1]`
 
 ## Required OOXML Strategy
 
-1. Locate the bibliography section. Accept headings such as `参考文献`, `References`, or a heading style whose visible text matches these labels.
+1. Locate the bibliography section. Accept headings such as `参考文献`, `参考资料`, `References`, or a heading style whose visible text matches these labels.
 2. Build a map from reference number to bibliography paragraph. Common entry starts include `[1]`, `［1］`, `1.`, `1、`, and `[1] 作者...`.
 3. For each bibliography entry, create a stable bookmark named `ref_001`, `ref_002`, and so on.
 4. The bookmark should wrap only the visible Arabic number token when possible, not the surrounding brackets or punctuation. If the entry starts as `[1]`, split the run so the bookmark wraps `1` only and leaves `[` and `]` outside.
