@@ -13,8 +13,9 @@ from typing import Optional
 from xml.etree import ElementTree as ET
 
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 W = f"{{{W_NS}}}"
-NS = {"w": W_NS}
+NS = {"w": W_NS, "m": M_NS}
 
 CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 LATIN_RE = re.compile(r"[A-Za-z]")
@@ -24,6 +25,13 @@ CITATION_RE = re.compile(r"[\[［【]\s*\d+(?:\s*(?:,|，|-|–|—)\s*\d+)*\s*[
 FULLWIDTH_CITATION_RE = re.compile(r"[［【]\s*\d+(?:\s*(?:,|，|-|–|—)\s*\d+)*\s*[］】]")
 CN_BIB_HEADING_RE = re.compile(r"^(?:第?[一二三四五六七八九十0-9]+(?:章|节)?[、.．]?)?(参考文献|参考资料)$")
 EN_BIB_HEADING_RE = re.compile(r"^(?:\d+[.)]?)?references$", re.I)
+VISIBLE_LATEX_RE = re.compile(r"\\(?:frac|sqrt|sum|prod|int|begin|mathrm|text|sin|exp|lg|max)|[_^]\{")
+TEXT_EQUATION_RE = re.compile(
+    r"(?<![A-Za-z])(?:[A-Za-z\u0370-\u03ff][A-Za-z0-9_{}\\]*|[A-Z])\s*(?:=|≤|≥|≈|<|>)"
+)
+TEXT_SUBSCRIPT_RE = re.compile(r"\b[A-Za-z\u0370-\u03ff]{1,4}_[A-Za-z0-9{}\\]+")
+SYMBOL_CONTEXT_RE = re.compile(r"(其中|式中|符号|变量|量符号|计算式|公式|表示|取|为)")
+BARE_QUANTITY_RE = re.compile(r"(?<![A-Za-z])(?:Q|N|N_p|Np|Z|V|T|H|P|R|Re|We|Ma|SNR|SN|I_i|T_N|T_D)(?![A-Za-z])")
 
 PROTECTED_PATTERNS = [
     re.compile(r"https?://\S+", re.I),
@@ -210,6 +218,38 @@ def audit_citations(document_xml: str, body_text: str, issues: list[Issue]) -> N
         )
 
 
+def has_omml(paragraph: ET.Element) -> bool:
+    return paragraph.find(".//m:oMath", NS) is not None or paragraph.find(".//m:oMathPara", NS) is not None
+
+
+def audit_formulas(paragraphs: list[ET.Element], issues: list[Issue]) -> None:
+    for index, paragraph in enumerate(paragraphs, start=1):
+        text = paragraph_text(paragraph).strip()
+        if not text:
+            continue
+        cleaned = strip_protected(text)
+        sample = text.replace("\n", " ")[:100]
+        visible_latex = VISIBLE_LATEX_RE.search(cleaned)
+        text_equation = TEXT_EQUATION_RE.search(cleaned)
+        text_subscript = TEXT_SUBSCRIPT_RE.search(cleaned)
+        context_symbol = SYMBOL_CONTEXT_RE.search(cleaned) and BARE_QUANTITY_RE.search(cleaned)
+        if visible_latex:
+            add_issue(
+                issues,
+                "FAIL",
+                "VISIBLE_LATEX",
+                f"Paragraph {index} contains visible LaTeX source instead of rendered Word OMML: {sample}",
+            )
+        elif text_equation or text_subscript or context_symbol:
+            severity = "WARN" if has_omml(paragraph) else "FAIL"
+            add_issue(
+                issues,
+                severity,
+                "FORMULA_TEXT",
+                f"Paragraph {index} has likely formula/quantity-symbol text that should be LaTeX-rendered OMML: {sample}",
+            )
+
+
 def load_document_xml(docx_path: Path) -> str:
     with zipfile.ZipFile(docx_path) as archive:
         return archive.read("word/document.xml").decode("utf-8")
@@ -246,8 +286,10 @@ def main() -> int:
     audit_tables(root, issues)
     audit_color(root, issues)
     audit_citations(document_xml, body_text, issues)
+    audit_formulas(paragraphs[:bib_index], issues)
 
-    print(f"Document language: {language} (CJK chars={cjk_count}, Latin letters={latin_count})")
+    omml_count = len(root.findall(".//m:oMath", NS)) + len(root.findall(".//m:oMathPara", NS))
+    print(f"Document language: {language} (CJK chars={cjk_count}, Latin letters={latin_count}, OMML objects={omml_count})")
     if not issues:
         print("PASS: no machine-detected guardrail issues.")
         return 0

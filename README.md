@@ -11,7 +11,7 @@ This repository packages a reusable Codex skill that applies a consistent Word/D
 - Left-aligned Word heading styles and outline levels for navigation and automatic TOC
 - Left-aligned abstract/keywords, black body text, and centered figure/table captions
 - White three-line tables without full grids or vertical lines, with table text at small-four/12 pt and nonconforming original tables normalized
-- Native Word OMML formulas with correct italic/upright rules
+- Formula discovery plus LaTeX-authored formulas, inline variables, and quantity symbols rendered into native Word OMML
 - Superscript, field-backed reference citations linked to bibliography entries
 - Consistent figure/table captions and numbering
 - Appendix code blocks with red comments
@@ -26,6 +26,7 @@ This repository packages a reusable Codex skill that applies a consistent Word/D
 │   └── openai.yaml
 ├── references/
     ├── formatting-standard.md
+    ├── latex-omml-formula-workflow.md
     └── citation-crossrefs-ooxml.md
 └── scripts/
     └── audit_docx_format.py
@@ -66,8 +67,10 @@ references/formatting-standard.md
 Core rule for formulas:
 
 ```text
-Variables are italic. Digits, operators, units, function names, constants,
-explanatory text, and explanatory subscripts are upright.
+Formulas, inline variables, mathematical objects, and quantity symbols must
+be authored as LaTeX and rendered into native Word OMML. Manual italic text
+is not enough. Variables are italic; digits, operators, units, function names,
+constants, explanatory text, and explanatory subscripts are upright.
 ```
 
 For DOCX edits, the skill can run a lightweight audit after formatting:
@@ -76,7 +79,7 @@ For DOCX edits, the skill can run a lightweight audit after formatting:
 python scripts/audit_docx_format.py path/to/report.docx
 ```
 
-The script flags common failures such as punctuation mismatches, abstract/keyword indentation, centered level-1 headings, direct non-12 pt table text, non-ASCII citation brackets, and missing `REF ref_###` citation fields.
+The script flags common failures such as punctuation mismatches, abstract/keyword indentation, centered level-1 headings, direct non-12 pt table text, likely plain-text formulas or quantity symbols, non-ASCII citation brackets, and missing `REF ref_###` citation fields.
 
 ## Maintenance Notes
 
