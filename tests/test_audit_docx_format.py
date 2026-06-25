@@ -47,6 +47,15 @@ def make_p(text: str, jc: Optional[str] = None, first_line: Optional[str] = None
     return ET.fromstring(xml)
 
 
+def make_runs_p(parts) -> ET.Element:
+    """Build a paragraph from a list of (text, is_superscript) tuples."""
+    runs = ""
+    for text, sup in parts:
+        rpr = '<w:rPr><w:vertAlign w:val="superscript"/></w:rPr>' if sup else ""
+        runs += f'<w:r>{rpr}<w:t xml:space="preserve">{text}</w:t></w:r>'
+    return ET.fromstring(f'<w:p xmlns:w="{W}">{runs}</w:p>')
+
+
 def codes(issues) -> set[str]:
     return {issue.code for issue in issues}
 
@@ -152,6 +161,24 @@ class HeadingTests(unittest.TestCase):
         issues = []
         aud.audit_headings([make_p("1 绪论", jc="center")], issues)
         self.assertIn("H1_CENTER", codes(issues))
+
+
+class BareCitationTests(unittest.TestCase):
+    def test_bare_superscript_number_after_cjk_flagged(self):
+        issues = []
+        aud.audit_bare_citations([make_runs_p([("研究表明该方法可行", False), ("1", True), ("。", False)])], issues)
+        self.assertIn("CITATION_NO_BRACKETS", codes(issues))
+
+    def test_bracketed_superscript_citation_ok(self):
+        issues = []
+        aud.audit_bare_citations([make_runs_p([("研究表明该方法可行", False), ("[1]", True), ("。", False)])], issues)
+        self.assertNotIn("CITATION_NO_BRACKETS", codes(issues))
+
+    def test_superscript_exponent_not_flagged(self):
+        # "m" + superscript "2" is an exponent (m²), not a citation.
+        issues = []
+        aud.audit_bare_citations([make_runs_p([("断面面积为 100 m", False), ("2", True), ("。", False)])], issues)
+        self.assertNotIn("CITATION_NO_BRACKETS", codes(issues))
 
 
 class SummaryTests(unittest.TestCase):

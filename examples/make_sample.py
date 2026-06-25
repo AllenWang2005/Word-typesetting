@@ -54,6 +54,13 @@ def build(path: str) -> None:
     # Citations with full-width brackets and a field-less ASCII bracket.
     doc.add_paragraph("已有研究表明该方法有效［1］，并在工程中得到验证[2]。")
 
+    # A bare superscript citation number that dropped its brackets (should be [3]).
+    bare = doc.add_paragraph()
+    bare.add_run("该结论亦见于相关文献")
+    sup = bare.add_run("3")
+    sup.font.superscript = True
+    bare.add_run("。")
+
     # A table whose text is not small-four (12 pt).
     table = doc.add_table(rows=1, cols=2)
     for idx, label in enumerate(("方案", "流量")):

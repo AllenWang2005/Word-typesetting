@@ -30,6 +30,8 @@ H1_STYLE_IDS = {"heading1", "标题1", "1"}
 CHINESE_PUNCT_RE = re.compile(r"[，。；：？！、“”‘’（）【】［］《》]")
 CITATION_RE = re.compile(r"[\[［【]\s*\d+(?:\s*(?:,|，|-|–|—)\s*\d+)*\s*[\]］】]")
 FULLWIDTH_CITATION_RE = re.compile(r"[［【]\s*\d+(?:\s*(?:,|，|-|–|—)\s*\d+)*\s*[］】]")
+# A superscript citation number with its brackets stripped, e.g. a bare "1" or "1,2"/"1-3".
+SUPERSCRIPT_CITATION_RE = re.compile(r"^\d+(?:\s*[,，、\-–—]\s*\d+)*$")
 CN_BIB_HEADING_RE = re.compile(r"^(?:第?[一二三四五六七八九十0-9]+(?:章|节)?[、.．]?)?(参考文献|参考资料)$")
 EN_BIB_HEADING_RE = re.compile(r"^(?:\d+[.)]?)?references$", re.I)
 VISIBLE_LATEX_RE = re.compile(r"\\(?:frac|sqrt|sum|prod|int|begin|mathrm|text|sin|exp|lg|max)|[_^]\{")
@@ -122,6 +124,10 @@ def paragraph_alignment(paragraph: ET.Element) -> Optional[str]:
 
 def paragraph_style(paragraph: ET.Element) -> str:
     return w_attr(paragraph.find("w:pPr/w:pStyle", NS), "val") or ""
+
+
+def run_is_superscript(run: ET.Element) -> bool:
+    return w_attr(run.find("w:rPr/w:vertAlign", NS), "val") == "superscript"
 
 
 def is_heading1_style(style_id: str) -> bool:
@@ -289,6 +295,57 @@ def audit_citations(
         )
 
 
+def audit_bare_citations(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """Warn about superscript citation numbers that dropped their brackets.
+
+    A citation should be the whole bracketed token (e.g. ``[1]``). A bare superscript
+    number such as ``1`` is reported as a WARN, not a FAIL, because it might instead be
+    an exponent. To limit false positives, a number whose base is alphanumeric
+    (an exponent like ``m`` + ``2`` or ``10`` + ``5``) is not flagged.
+    """
+    for index, paragraph in enumerate(paragraphs, start=1):
+        segments: list[tuple[str, bool]] = []
+        for run in paragraph.findall(".//w:r", NS):
+            text = "".join(node.text or "" for node in run.findall(".//w:t", NS))
+            if text:
+                segments.append((text, run_is_superscript(run)))
+        preceding = ""
+        position = 0
+        while position < len(segments):
+            text, superscript = segments[position]
+            if not superscript:
+                preceding = text[-1]
+                position += 1
+                continue
+            group = text
+            cursor = position + 1
+            while cursor < len(segments) and segments[cursor][1]:
+                group += segments[cursor][0]
+                cursor += 1
+            token = group.strip()
+            base_is_exponent = bool(preceding) and preceding.isascii() and preceding.isalnum()
+            if (
+                SUPERSCRIPT_CITATION_RE.match(token)
+                and "[" not in group
+                and "]" not in group
+                and not base_is_exponent
+            ):
+                add_issue(
+                    issues,
+                    "WARN",
+                    "CITATION_NO_BRACKETS",
+                    f"Paragraph {index} has a bare superscript number '{token}' with no brackets; "
+                    "a citation should be the whole bracketed [n], not a bare number.",
+                    counts,
+                )
+            preceding = group[-1] if group else preceding
+            position = cursor
+
+
 def has_omml(paragraph: ET.Element) -> bool:
     return paragraph.find(".//m:oMath", NS) is not None or paragraph.find(".//m:oMathPara", NS) is not None
 
@@ -409,6 +466,7 @@ def main() -> int:
     audit_tables(root, issues, issue_counts)
     audit_color(root, issues, issue_counts)
     audit_citations(document_xml, body_text, issues, issue_counts)
+    audit_bare_citations(paragraphs[:bib_index], issues, issue_counts)
     audit_formulas(paragraphs[:bib_index], issues, issue_counts)
 
     omml_count = len(root.findall(".//m:oMath", NS)) + len(root.findall(".//m:oMathPara", NS))

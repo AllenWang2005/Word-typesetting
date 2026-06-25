@@ -28,6 +28,7 @@ The sample intentionally violates several rules, so the auditor reports a mix of
 | `VISIBLE_LATEX` | `\frac{a}{b}` left as visible LaTeX source |
 | `CITATION_BRACKETS` | Full-width citation brackets `［1］` |
 | `CITATION_FIELDS` | ASCII citation `[2]` with no backing `REF ref_###` field |
+| `CITATION_NO_BRACKETS` | Bare superscript `3` citation that dropped its `[ ]` brackets |
 | `TABLE_SIZE` | Table text set to 14 pt instead of small-four / 12 pt |
 
 A fully compliant document produces `PASS: no machine-detected guardrail issues.`
