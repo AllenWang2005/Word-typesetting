@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 import zipfile
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -16,10 +18,15 @@ W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 W = f"{{{W_NS}}}"
 NS = {"w": W_NS, "m": M_NS}
+AUDIT_SCOPE = (
+    "Main document story only: word/document.xml. Headers, footers, footnotes, "
+    "endnotes, comments, and separate embedded parts are not audited by this script."
+)
 
 CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 LATIN_RE = re.compile(r"[A-Za-z]")
-CHINESE_H1_RE = re.compile(r"^[一二三四五六七八九十]+[、.]")
+H1_TEXT_RE = re.compile(r"^(?:[一二三四五六七八九十]+[、.．]|第?[一二三四五六七八九十0-9]+章\b|[0-9]+(?:[、.．]\s*|\s+).+)")
+H1_STYLE_IDS = {"heading1", "标题1", "1"}
 CHINESE_PUNCT_RE = re.compile(r"[，。；：？！、“”‘’（）【】［］《》]")
 CITATION_RE = re.compile(r"[\[［【]\s*\d+(?:\s*(?:,|，|-|–|—)\s*\d+)*\s*[\]］】]")
 FULLWIDTH_CITATION_RE = re.compile(r"[［【]\s*\d+(?:\s*(?:,|，|-|–|—)\s*\d+)*\s*[］】]")
@@ -60,6 +67,10 @@ class Issue:
     message: str
 
 
+class AuditInputError(Exception):
+    """Raised when the input file cannot be audited as a normal DOCX."""
+
+
 def w_attr(element: Optional[ET.Element], name: str) -> Optional[str]:
     if element is None:
         return None
@@ -77,8 +88,21 @@ def strip_protected(text: str) -> str:
     return cleaned
 
 
-def add_issue(issues: list[Issue], severity: str, code: str, message: str, limit: int = 8) -> None:
-    if sum(1 for issue in issues if issue.code == code) < limit:
+def add_issue(
+    issues: list[Issue],
+    severity: str,
+    code: str,
+    message: str,
+    counts: Optional[dict[tuple[str, str], int]] = None,
+    limit: int = 8,
+) -> None:
+    if counts is None:
+        if sum(1 for issue in issues if issue.code == code) < limit:
+            issues.append(Issue(severity, code, message))
+        return
+    key = (severity, code)
+    counts[key] = counts.get(key, 0) + 1
+    if counts[key] <= limit:
         issues.append(Issue(severity, code, message))
 
 
@@ -89,8 +113,21 @@ def detect_language(text: str) -> tuple[str, int, int]:
     return language, cjk_count, latin_count
 
 
-def paragraph_alignment(paragraph: ET.Element) -> str | None:
+def paragraph_alignment(paragraph: ET.Element) -> Optional[str]:
     return w_attr(paragraph.find("w:pPr/w:jc", NS), "val")
+
+
+def paragraph_style(paragraph: ET.Element) -> str:
+    return w_attr(paragraph.find("w:pPr/w:pStyle", NS), "val") or ""
+
+
+def is_heading1_style(style_id: str) -> bool:
+    normalized = re.sub(r"[\s_-]+", "", style_id).lower()
+    return normalized in H1_STYLE_IDS or normalized.endswith("heading1")
+
+
+def is_level1_heading(paragraph: ET.Element, text: str) -> bool:
+    return is_heading1_style(paragraph_style(paragraph)) or bool(H1_TEXT_RE.match(text))
 
 
 def has_nonzero_indent(paragraph: ET.Element) -> bool:
@@ -115,7 +152,12 @@ def has_spacing_before(paragraph: ET.Element) -> bool:
     return False
 
 
-def audit_punctuation(paragraphs: list[ET.Element], language: str, issues: list[Issue]) -> None:
+def audit_punctuation(
+    paragraphs: list[ET.Element],
+    language: str,
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
     for index, paragraph in enumerate(paragraphs, start=1):
         text = paragraph_text(paragraph)
         if not text.strip():
@@ -139,6 +181,7 @@ def audit_punctuation(paragraphs: list[ET.Element], language: str, issues: list[
                     "FAIL",
                     "ZH_PUNCT",
                     f"Paragraph {index} has likely ASCII punctuation in Chinese prose: {sample}",
+                    counts,
                 )
         else:
             if CHINESE_PUNCT_RE.search(cleaned):
@@ -147,10 +190,15 @@ def audit_punctuation(paragraphs: list[ET.Element], language: str, issues: list[
                     "FAIL",
                     "EN_PUNCT",
                     f"Paragraph {index} has Chinese punctuation in an English document: {sample}",
+                    counts,
                 )
 
 
-def audit_abstract_keywords(paragraphs: list[ET.Element], issues: list[Issue]) -> None:
+def audit_abstract_keywords(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
     for index, paragraph in enumerate(paragraphs, start=1):
         text = paragraph_text(paragraph).strip()
         normalized = re.sub(r"\s+", "", text).lower()
@@ -161,28 +209,34 @@ def audit_abstract_keywords(paragraphs: list[ET.Element], issues: list[Issue]) -
                     "FAIL",
                     "ABSTRACT_INDENT",
                     f"Paragraph {index} looks like abstract/keywords but is centered or indented: {text[:80]}",
+                    counts,
                 )
 
 
-def audit_headings(paragraphs: list[ET.Element], issues: list[Issue]) -> None:
+def audit_headings(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
     previous_text = ""
     for index, paragraph in enumerate(paragraphs, start=1):
         text = paragraph_text(paragraph).strip()
-        if CHINESE_H1_RE.match(text):
+        if is_level1_heading(paragraph, text):
             if paragraph_alignment(paragraph) == "center":
-                add_issue(issues, "FAIL", "H1_CENTER", f"Level-1 heading is centered at paragraph {index}: {text[:80]}")
+                add_issue(issues, "FAIL", "H1_CENTER", f"Level-1 heading is centered at paragraph {index}: {text[:80]}", counts)
             if index > 1 and previous_text and not has_spacing_before(paragraph):
                 add_issue(
                     issues,
                     "WARN",
                     "H1_GAP",
                     f"Level-1 heading may need a blank visual gap before it at paragraph {index}: {text[:80]}",
+                    counts,
                 )
         if text:
             previous_text = text
 
 
-def audit_tables(root: ET.Element, issues: list[Issue]) -> None:
+def audit_tables(root: ET.Element, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:
     for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
         for run in table.findall(".//w:r", NS):
             if not paragraph_text(run).strip():
@@ -196,11 +250,12 @@ def audit_tables(root: ET.Element, issues: list[Issue]) -> None:
                         "FAIL",
                         "TABLE_SIZE",
                         f"Table {table_index} has direct font size {value}; expected small-four/12 pt (w:sz=24).",
+                        counts,
                     )
                     break
 
 
-def audit_color(root: ET.Element, issues: list[Issue]) -> None:
+def audit_color(root: ET.Element, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:
     for color in root.findall(".//w:color", NS):
         value = (w_attr(color, "val") or "").upper()
         if value and value not in ("000000", "AUTO", "C00000"):
@@ -209,18 +264,25 @@ def audit_color(root: ET.Element, issues: list[Issue]) -> None:
                 "WARN",
                 "COLOR",
                 f"Found direct font color {value}; verify it is intentional. Body/captions/tables/references should be black.",
+                counts,
             )
 
 
-def audit_citations(document_xml: str, body_text: str, issues: list[Issue]) -> None:
+def audit_citations(
+    document_xml: str,
+    body_text: str,
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
     if FULLWIDTH_CITATION_RE.search(body_text):
-        add_issue(issues, "FAIL", "CITATION_BRACKETS", "Body citations use full-width or non-ASCII brackets.")
+        add_issue(issues, "FAIL", "CITATION_BRACKETS", "Body citations use full-width or non-ASCII brackets.", counts)
     if CITATION_RE.search(body_text) and "REF ref_" not in document_xml:
         add_issue(
             issues,
             "FAIL",
             "CITATION_FIELDS",
             "Body citation patterns exist, but no Word REF ref_### cross-reference fields were found.",
+            counts,
         )
 
 
@@ -228,7 +290,11 @@ def has_omml(paragraph: ET.Element) -> bool:
     return paragraph.find(".//m:oMath", NS) is not None or paragraph.find(".//m:oMathPara", NS) is not None
 
 
-def audit_formulas(paragraphs: list[ET.Element], issues: list[Issue]) -> None:
+def audit_formulas(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
     for index, paragraph in enumerate(paragraphs, start=1):
         text = paragraph_text(paragraph).strip()
         if not text:
@@ -245,6 +311,7 @@ def audit_formulas(paragraphs: list[ET.Element], issues: list[Issue]) -> None:
                 "FAIL",
                 "VISIBLE_LATEX",
                 f"Paragraph {index} contains visible LaTeX source instead of rendered Word OMML: {sample}",
+                counts,
             )
         elif text_equation or text_subscript or context_symbol:
             severity = "WARN" if has_omml(paragraph) else "FAIL"
@@ -253,12 +320,23 @@ def audit_formulas(paragraphs: list[ET.Element], issues: list[Issue]) -> None:
                 severity,
                 "FORMULA_TEXT",
                 f"Paragraph {index} has likely formula/quantity-symbol text that should be LaTeX-rendered OMML: {sample}",
+                counts,
             )
 
 
 def load_document_xml(docx_path: Path) -> str:
-    with zipfile.ZipFile(docx_path) as archive:
-        return archive.read("word/document.xml").decode("utf-8")
+    try:
+        with zipfile.ZipFile(docx_path) as archive:
+            try:
+                return archive.read("word/document.xml").decode("utf-8")
+            except KeyError as exc:
+                raise AuditInputError(
+                    "This file does not contain word/document.xml; it may be encrypted, damaged, or not a normal DOCX."
+                ) from exc
+    except zipfile.BadZipFile as exc:
+        raise AuditInputError("Input is not a valid DOCX zip package. Save .doc files as .docx before auditing.") from exc
+    except RuntimeError as exc:
+        raise AuditInputError(f"Could not read the DOCX package: {exc}") from exc
 
 
 def is_bibliography_heading(text: str) -> bool:
@@ -266,18 +344,51 @@ def is_bibliography_heading(text: str) -> bool:
     return bool(CN_BIB_HEADING_RE.match(stripped) or EN_BIB_HEADING_RE.match(stripped))
 
 
+def summarize_issues(issues: list[Issue], counts: dict[tuple[str, str], int]) -> tuple[dict[str, int], list[dict[str, object]]]:
+    if not counts:
+        counts.update(Counter((issue.severity, issue.code) for issue in issues))
+    printed = Counter((issue.severity, issue.code) for issue in issues)
+    omitted = []
+    summary = {"FAIL": 0, "WARN": 0, "printed": len(issues), "omitted": 0}
+    for (severity, code), total in sorted(counts.items()):
+        summary[severity] = summary.get(severity, 0) + total
+        skipped = total - printed[(severity, code)]
+        if skipped > 0:
+            summary["omitted"] += skipped
+            omitted.append({"severity": severity, "code": code, "omitted": skipped})
+    return summary, omitted
+
+
+def print_json_result(result: dict) -> None:
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Audit a DOCX against Allen's Word report formatting guardrails.")
     parser.add_argument("docx", type=Path, help="Path to the DOCX file to audit.")
     parser.add_argument("--language", choices=("zh", "en"), help="Override dominant document language detection.")
+    parser.add_argument("--json", action="store_true", dest="json_output", help="Emit machine-readable JSON output.")
     args = parser.parse_args()
 
     if not args.docx.exists():
-        print(f"ERROR: file not found: {args.docx}", file=sys.stderr)
+        message = f"File not found: {args.docx}"
+        if args.json_output:
+            print_json_result({"status": "error", "error": message, "scope": AUDIT_SCOPE})
+        else:
+            print(f"ERROR: {message}", file=sys.stderr)
         return 2
 
-    document_xml = load_document_xml(args.docx)
-    root = ET.fromstring(document_xml)
+    try:
+        document_xml = load_document_xml(args.docx)
+        root = ET.fromstring(document_xml)
+    except (AuditInputError, ET.ParseError) as exc:
+        message = str(exc)
+        if args.json_output:
+            print_json_result({"status": "error", "error": message, "scope": AUDIT_SCOPE})
+        else:
+            print(f"ERROR: {message}", file=sys.stderr)
+        return 2
+
     paragraphs = root.findall(".//w:body//w:p", NS)
     texts = [paragraph_text(paragraph) for paragraph in paragraphs]
     bib_index = next((index for index, text in enumerate(texts) if is_bibliography_heading(text)), len(texts))
@@ -286,18 +397,43 @@ def main() -> int:
     language = args.language or detected_language
 
     issues: list[Issue] = []
-    audit_punctuation(paragraphs[:bib_index], language, issues)
-    audit_abstract_keywords(paragraphs, issues)
-    audit_headings(paragraphs, issues)
-    audit_tables(root, issues)
-    audit_color(root, issues)
-    audit_citations(document_xml, body_text, issues)
-    audit_formulas(paragraphs[:bib_index], issues)
+    issue_counts: dict[tuple[str, str], int] = {}
+    audit_punctuation(paragraphs[:bib_index], language, issues, issue_counts)
+    audit_abstract_keywords(paragraphs, issues, issue_counts)
+    audit_headings(paragraphs, issues, issue_counts)
+    audit_tables(root, issues, issue_counts)
+    audit_color(root, issues, issue_counts)
+    audit_citations(document_xml, body_text, issues, issue_counts)
+    audit_formulas(paragraphs[:bib_index], issues, issue_counts)
 
     omml_count = len(root.findall(".//m:oMath", NS)) + len(root.findall(".//m:oMathPara", NS))
+    summary, omitted = summarize_issues(issues, issue_counts)
+    status = "fail" if summary["FAIL"] else "pass"
+
+    if args.json_output:
+        print_json_result(
+            {
+                "status": status,
+                "scope": AUDIT_SCOPE,
+                "language": language,
+                "stats": {"cjk_chars": cjk_count, "latin_letters": latin_count, "omml_objects": omml_count},
+                "summary": {
+                    "fail": summary["FAIL"],
+                    "warn": summary["WARN"],
+                    "printed": summary["printed"],
+                    "omitted": summary["omitted"],
+                },
+                "issues": [issue.__dict__ for issue in issues],
+                "omitted_by_code": omitted,
+            }
+        )
+        return 1 if summary["FAIL"] else 0
+
     print(f"Document language: {language} (CJK chars={cjk_count}, Latin letters={latin_count}, OMML objects={omml_count})")
+    print(f"Audit scope: {AUDIT_SCOPE}")
     if not issues:
         print("PASS: no machine-detected guardrail issues.")
+        print("Summary: FAIL=0 WARN=0 printed=0 omitted=0")
         return 0
 
     for severity in ("FAIL", "WARN"):
@@ -305,7 +441,11 @@ def main() -> int:
             if issue.severity == severity:
                 print(f"{issue.severity} {issue.code}: {issue.message}")
 
-    return 1 if any(issue.severity == "FAIL" for issue in issues) else 0
+    for item in omitted:
+        print(f"OMITTED {item['severity']} {item['code']}: {item['omitted']} additional issue(s) not shown.")
+
+    print(f"Summary: FAIL={summary['FAIL']} WARN={summary['WARN']} printed={summary['printed']} omitted={summary['omitted']}")
+    return 1 if summary["FAIL"] else 0
 
 
 if __name__ == "__main__":

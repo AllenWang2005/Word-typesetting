@@ -11,6 +11,7 @@ import importlib.util
 import pathlib
 import sys
 import unittest
+from typing import Optional
 from xml.etree import ElementTree as ET
 
 
@@ -29,8 +30,10 @@ aud = _load_audit_module()
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 
-def make_p(text: str, jc: str | None = None, first_line: str | None = None) -> ET.Element:
+def make_p(text: str, jc: Optional[str] = None, first_line: Optional[str] = None, style: Optional[str] = None) -> ET.Element:
     ppr = ""
+    if style:
+        ppr += f'<w:pStyle w:val="{style}"/>'
     if jc:
         ppr += f'<w:jc w:val="{jc}"/>'
     if first_line:
@@ -122,6 +125,36 @@ class CitationTests(unittest.TestCase):
         xml = '<w:document> ... <w:fldSimple w:instr=" REF ref_001 \\h "/> ... </w:document>'
         aud.audit_citations(xml, "参见文献[1]的结论。", issues)
         self.assertNotIn("CITATION_FIELDS", codes(issues))
+
+
+class HeadingTests(unittest.TestCase):
+    def test_heading1_style_centered_flagged(self):
+        issues = []
+        aud.audit_headings([make_p("Introduction", jc="center", style="Heading1")], issues)
+        self.assertIn("H1_CENTER", codes(issues))
+
+    def test_chinese_title_style_centered_flagged(self):
+        issues = []
+        aud.audit_headings([make_p("绪论", jc="center", style="标题1")], issues)
+        self.assertIn("H1_CENTER", codes(issues))
+
+    def test_arabic_heading_text_centered_flagged(self):
+        issues = []
+        aud.audit_headings([make_p("1 绪论", jc="center")], issues)
+        self.assertIn("H1_CENTER", codes(issues))
+
+
+class SummaryTests(unittest.TestCase):
+    def test_omitted_issue_count_reported(self):
+        issues = []
+        counts = {}
+        for index in range(10):
+            aud.add_issue(issues, "FAIL", "ZH_PUNCT", f"issue {index}", counts)
+        summary, omitted = aud.summarize_issues(issues, counts)
+        self.assertEqual(len(issues), 8)
+        self.assertEqual(summary["FAIL"], 10)
+        self.assertEqual(summary["omitted"], 2)
+        self.assertEqual(omitted[0]["code"], "ZH_PUNCT")
 
 
 if __name__ == "__main__":

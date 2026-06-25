@@ -4,10 +4,10 @@
 
 **规范版本：2026-06-25。** 本文件为主清单；详细规则拆分到配套参考文件：
 
-- `references/20260625-document-structure-and-page-setup.md`：文档结构与顺序、页面设置、页眉页脚、页码与分节、目录、字号体系、多级编号、孤行控制。
-- `references/20260625-latex-omml-formula-workflow.md`：LaTeX→OMML 公式识别与转换工作流。
-- `references/20260625-reference-style-gbt7714.md`：GB/T 7714 参考文献条目著录格式。
-- `references/20260625-citation-crossrefs-ooxml.md`：正文引用上标 + Word `REF` 交叉引用的 OOXML 实现。
+- `references/document-structure-and-page-setup.md`：文档结构与顺序、页面设置、页眉页脚、页码与分节、目录、字号体系、多级编号、孤行控制。
+- `references/latex-omml-formula-workflow.md`：LaTeX→OMML 公式识别与转换工作流。
+- `references/reference-style-gbt7714.md`：GB/T 7714 参考文献条目著录格式。
+- `references/citation-crossrefs-ooxml.md`：正文引用上标 + Word `REF` 交叉引用的 OOXML 实现。
 
 ## 页面与正文
 
@@ -31,7 +31,7 @@
   | 参考文献条目 | 五号 | 同正文 |
   | 脚注 | 小五 | 同正文 |
 
-- 页面设置、页眉页脚、页码与分节、目录等版式见 `references/20260625-document-structure-and-page-setup.md`。
+- 页面设置、页眉页脚、页码与分节、目录等版式见 `references/document-structure-and-page-setup.md`。
 
 ## 语言与标点
 
@@ -69,7 +69,7 @@
 
 - 公式、行内变量、数学对象和量符号必须先写成 LaTeX，再渲染为 Word 原生 OMML 公式对象；不用截图、纯文本临摹、普通文字斜体或 LaTeX 源码直接显示。
 - 修改既有 DOCX 时必须先做公式识别：正文、表格、图表题注和符号说明中的显示公式、行内公式、变量、上下标、量符号、单位表达式、计算式都要纳入，不只处理已经是 Word 公式对象的内容。
-- 执行时必须参考 `references/20260625-latex-omml-formula-workflow.md`，建立临时公式清单，记录每一处数学内容的原文、LaTeX 源、位置、行内/独立公式类型和是否已转换为 OMML。
+- 执行时必须参考 `references/latex-omml-formula-workflow.md`，建立临时公式清单，记录每一处数学内容的原文、LaTeX 源、位置、行内/独立公式类型和是否已转换为 OMML。
 - 独立公式居中成行，公式编号按章右对齐，例如 `式(1-1)`、`式(2-3)`；正文引用统一用“式(1-1)”形式，全文编号方式保持一致。
 - 变量用 LaTeX 数学变量表示并渲染为斜体 OMML，例如 `x`、`y`、`Q`、`N`、`Z`、`V`、`η`；不要用普通正文字符手工斜体替代。
 - 非变量用正体，包括数字、单位、运算符、函数名、常数、说明性缩写、说明性中文和说明性下标。
@@ -91,15 +91,15 @@
 ## 数字、单位与符号用法
 
 - 数字与单位之间留一个空格，单位用正体法定计量单位符号，例如 `20 m³/s`、`43.5 万 kW`、`50 %`。
-- 量符号与单位的正斜体规则见“公式与变量”节及 `references/20260625-latex-omml-formula-workflow.md`：量符号斜体，单位正体。
+- 量符号与单位的正斜体规则见“公式与变量”节及 `references/latex-omml-formula-workflow.md`：量符号斜体，单位正体。
 - 遵循 GB 3100/3101/3102（量和单位）：使用国际单位制及其符号，不混用中英文单位写法。
 - 遵循 GB/T 15835（出版物上数字用法）：计量与统计数值、编号、年月日用阿拉伯数字（如“3 组数据”“第 2 方案”）；非定量、习惯性、与汉字搭配的概数用汉字（如“三峡”“十几个”“二三十年”）；同一体例全文保持一致。
 - 多位数字按三位分节或按学科惯例处理，全文统一；小数点用 `.`，不用中文句号。
 
 ## 参考文献与交叉引用
 
-- 正文引用标记与 Word `REF` 交叉引用的 OOXML 实现见 `references/20260625-citation-crossrefs-ooxml.md`。
-- 文末参考文献条目的著录格式（GB/T 7714、文献类型标识 `[J]/[M]/[D]/[C]/[S]/[EB/OL]` 等）见 `references/20260625-reference-style-gbt7714.md`。
+- 正文引用标记与 Word `REF` 交叉引用的 OOXML 实现见 `references/citation-crossrefs-ooxml.md`。
+- 文末参考文献条目的著录格式（GB/T 7714、文献类型标识 `[J]/[M]/[D]/[C]/[S]/[EB/OL]` 等）见 `references/reference-style-gbt7714.md`。
 - 论文正文中的引用标记默认用上标，例如把正文里的 `[1]`、`[1][2]`、`[1,2]`、`[1-3]` 改成右上角引用。
 - 引用标记必须使用英文半角中括号 `[` 和 `]`；如果原文使用 `［］`、`【】`、`（）` 等中文或全角括号，统一改为英文半角中括号。
 - 不要只把普通文本改成上标；应尽量做成 Word 字段/交叉引用，使正文引用和文末参考文献编号对应。
@@ -126,7 +126,7 @@
 
 ## 交付前检查
 
-- 检查文档结构与顺序、页面设置、页眉页脚、页码与分节、目录是否符合 `references/20260625-document-structure-and-page-setup.md`。
+- 检查文档结构与顺序、页面设置、页眉页脚、页码与分节、目录是否符合 `references/document-structure-and-page-setup.md`。
 - 检查标题导航、目录页码、图表编号、公式编号、交叉引用是否一致。
 - 检查正文是否为中文宋体、英文数字 Times New Roman、小四为主；各级标题是否黑体；字号是否符合字号层级表。
 - 检查主语言与标点是否一致：中文文档的中文正文用中文标点，英文短语/代码/公式/URL/DOI/小数/引用方括号保持英文标点；英文文档用英文标点；省略号、破折号、连接号、书名号等专门标点是否规范。

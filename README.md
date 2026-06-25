@@ -27,11 +27,11 @@ This repository packages a reusable Codex skill that applies a consistent Word/D
 ├── agents/
 │   └── openai.yaml
 ├── references/
-│   ├── 20260625-formatting-standard.md
-│   ├── 20260625-document-structure-and-page-setup.md
-│   ├── 20260625-latex-omml-formula-workflow.md
-│   ├── 20260625-reference-style-gbt7714.md
-│   └── 20260625-citation-crossrefs-ooxml.md
+│   ├── formatting-standard.md
+│   ├── document-structure-and-page-setup.md
+│   ├── latex-omml-formula-workflow.md
+│   ├── reference-style-gbt7714.md
+│   └── citation-crossrefs-ooxml.md
 ├── scripts/
 │   └── audit_docx_format.py
 ├── examples/
@@ -41,8 +41,6 @@ This repository packages a reusable Codex skill that applies a consistent Word/D
 └── tests/
     └── test_audit_docx_format.py
 ```
-
-Reference documents are date-prefixed (`YYYYMMDD-`) so standard revisions are easy to track. When the standard changes, add new dated reference files and update the paths in `SKILL.md`.
 
 ## Install
 
@@ -74,7 +72,7 @@ The skill should also trigger naturally for tasks involving formal Chinese Word 
 The full formatting checklist lives in:
 
 ```text
-references/20260625-formatting-standard.md
+references/formatting-standard.md
 ```
 
 Core rule for formulas:
@@ -94,6 +92,16 @@ python scripts/audit_docx_format.py path/to/report.docx
 
 The script flags common failures such as punctuation mismatches, abstract/keyword indentation, centered level-1 headings, direct non-12 pt table text, likely plain-text formulas or quantity symbols, non-ASCII citation brackets, and missing `REF ref_###` citation fields. It is intentionally domain-neutral: it does not hard-code any field-specific symbol list.
 
+Audit scope: the script inspects the main document story in `word/document.xml`. It does not currently audit separate headers, footers, footnotes, endnotes, comments, or embedded package parts; verify those visually or with a deeper OOXML pass when they matter.
+
+Use JSON output for CI or tool integration:
+
+```text
+python scripts/audit_docx_format.py path/to/report.docx --json
+```
+
+Text output ends with a `FAIL/WARN` summary and reports how many issues were omitted when a code exceeds the per-code display limit.
+
 ## Examples
 
 See `examples/` for a runnable script (`make_sample.py`) that builds a deliberately non-compliant DOCX with python-docx, plus the captured audit output (`sample-audit-output.txt`) showing what the auditor reports.
@@ -111,7 +119,7 @@ CI runs `py_compile` plus these tests on every push (see `.github/workflows/ci.y
 ## Maintenance Notes
 
 - Keep `SKILL.md` concise so it loads quickly when the skill triggers.
-- Put detailed formatting rules in the dated `references/` files.
+- Put detailed formatting rules in `references/`.
 - Keep `scripts/audit_docx_format.py` conservative: use `FAIL` only for machine-checkable violations and `WARN` for items that require visual review.
 - Do not store private information, credentials, or one-off chat history in this repository.
-- When the formatting standard changes, add a new dated reference file (or update an existing one) and refresh the short summary and paths in `SKILL.md`.
+- When the formatting standard changes, update the relevant reference file and refresh the short summary and paths in `SKILL.md`.

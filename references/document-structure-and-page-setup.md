@@ -47,7 +47,7 @@
 
 ## 字号体系
 
-各结构层级的默认字号见 `references/20260625-formatting-standard.md` 的“字号层级表”。要点：
+各结构层级的默认字号见 `references/formatting-standard.md` 的“字号层级表”。要点：
 
 - 题目二号黑体居中；一级标题三号/小三、二级四号、三级小四，均黑体加粗。
 - 正文小四（12 pt），中文宋体、西文与数字 Times New Roman。
