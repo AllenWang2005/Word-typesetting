@@ -91,6 +91,16 @@ class FormulaTests(unittest.TestCase):
         aud.audit_formulas([make_p("式中 G_k 为永久荷载标准值。")], issues)
         self.assertIn("FORMULA_TEXT", codes(issues))
 
+    def test_bare_quantity_symbols_in_definition_context_flagged(self):
+        issues = []
+        aud.audit_formulas([make_p("式中 Q 为流量，N 为出力。")], issues)
+        self.assertIn("FORMULA_TEXT", codes(issues))
+
+    def test_bare_quantity_symbol_with_definition_verb_flagged(self):
+        issues = []
+        aud.audit_formulas([make_p("其中 H 表示水头，V 为流速。")], issues)
+        self.assertIn("FORMULA_TEXT", codes(issues))
+
     def test_visible_latex_flagged(self):
         issues = []
         aud.audit_formulas([make_p("比值可用 \\frac{a}{b} 计算。")], issues)
@@ -102,8 +112,8 @@ class FormulaTests(unittest.TestCase):
         issues = []
         prose = [
             make_p("本方案的目标为提高发电效益，T 型布置更合理。"),
-            make_p("经济指标表示该方案 P 值更优。"),
-            make_p("下面取 N 个样本进行统计分析。"),
+            make_p("经济指标表示该方案整体更优。"),
+            make_p("下面选取三个样本进行统计分析。"),
         ]
         aud.audit_formulas(prose, issues)
         self.assertEqual(codes(issues), set())

@@ -37,14 +37,17 @@ TEXT_EQUATION_RE = re.compile(
     r"(?<![A-Za-z])(?:[A-Za-z\u0370-\u03ff][A-Za-z0-9_{}\\]*|[A-Z])\s*(?:=|≤|≥|≈|<|>)"
 )
 TEXT_SUBSCRIPT_RE = re.compile(r"\b[A-Za-z\u0370-\u03ff]{1,4}_[A-Za-z0-9{}\\]+")
-# Generic formula-context cues. Kept to strong indicators so ordinary prose (for example a
-# sentence that merely contains "为" or "取") is not misread as a formula.
+# Generic formula-context cues. Strong definition cues intentionally include bare quantity symbols
+# such as "式中 Q 为流量，N 为出力" because report rules require these symbols to be rendered as OMML.
 SYMBOL_CONTEXT_RE = re.compile(r"(式中|其中|符号|变量|量符号|计算式|公式)")
-# A generic quantity symbol: a single Latin or Greek letter carrying a subscript or superscript,
-# e.g. N_p, T_{N}, R_{\mathrm{SN}}, x^2. Domain-specific symbol lists are intentionally avoided so
-# the auditor stays general-purpose. A bare single letter with no sub/superscript is NOT treated as
-# a quantity symbol, which is what previously produced false positives such as "T 型" or "P 值".
-BARE_QUANTITY_RE = re.compile(r"(?<![A-Za-zͰ-Ͽ])[A-Za-zͰ-Ͽ][_^]\{?[A-Za-z0-9Ͱ-Ͽ]")
+# Generic quantity symbols. Domain-specific symbol lists are intentionally avoided so the auditor
+# stays general-purpose and catches unknown engineering symbols instead of only hydraulics terms.
+SUBSCRIPT_OR_SUPERSCRIPT_QUANTITY_RE = re.compile(r"(?<![A-Za-zͰ-Ͽ])[A-Za-zͰ-Ͽ][_^]\{?[A-Za-z0-9Ͱ-Ͽ]")
+BARE_QUANTITY_SYMBOL_RE = re.compile(r"(?<![A-Za-zͰ-Ͽ])[A-Za-zͰ-Ͽ](?![A-Za-zͰ-Ͽ])")
+BARE_SYMBOL_DEFINITION_RE = re.compile(
+    r"(?<![A-Za-zͰ-Ͽ])([A-Za-zͰ-Ͽ])(?![A-Za-zͰ-Ͽ])\s*(?:为|表示|是|取|=)"
+    r"|(?:记为|表示为|表示|为|取)\s*([A-Za-zͰ-Ͽ])(?![A-Za-zͰ-Ͽ])"
+)
 
 PROTECTED_PATTERNS = [
     re.compile(r"https?://\S+", re.I),
@@ -304,7 +307,9 @@ def audit_formulas(
         visible_latex = VISIBLE_LATEX_RE.search(cleaned)
         text_equation = TEXT_EQUATION_RE.search(cleaned)
         text_subscript = TEXT_SUBSCRIPT_RE.search(cleaned)
-        context_symbol = SYMBOL_CONTEXT_RE.search(cleaned) and BARE_QUANTITY_RE.search(cleaned)
+        subscript_symbol = SUBSCRIPT_OR_SUPERSCRIPT_QUANTITY_RE.search(cleaned)
+        definition_symbol = BARE_SYMBOL_DEFINITION_RE.search(cleaned)
+        context_symbol = SYMBOL_CONTEXT_RE.search(cleaned) and BARE_QUANTITY_SYMBOL_RE.search(cleaned)
         if visible_latex:
             add_issue(
                 issues,
@@ -313,7 +318,7 @@ def audit_formulas(
                 f"Paragraph {index} contains visible LaTeX source instead of rendered Word OMML: {sample}",
                 counts,
             )
-        elif text_equation or text_subscript or context_symbol:
+        elif text_equation or text_subscript or subscript_symbol or definition_symbol or context_symbol:
             severity = "WARN" if has_omml(paragraph) else "FAIL"
             add_issue(
                 issues,

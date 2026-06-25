@@ -18,9 +18,10 @@ Scan the whole document before formatting. Treat all of these as candidates:
 - Paragraphs or table cells containing operators such as `=`, `+`, `-`, `/`, `^`, `≤`, `≥`, `∑`, `Σ`, `∏`, `√`, fractions, integrals, or formula numbering.
 - Inline quantity symbols in explanatory prose, such as `Q`, `N_p`, `Z-V`, `P=0.01%`, `R_SN`, `Re`, `We`, `Ma`, `T_N`, `T_D`, `I_i`.
 - Symbol definitions after words such as `其中`, `式中`, `符号`, `变量`, `计算式`, `公式`, `取`, `为`, or `表示`.
+- Bare one-letter symbols in definition/explanation contexts, e.g. `式中 Q 为流量，N 为出力`, `其中 H 表示水头`, and `V 为流速`. Do not skip them just because they have no subscript.
 - Table headers/cells that contain variables, units coupled to variables, subscripts, superscripts, or engineering symbols.
 
-Do not skip inline math just because it is short. A single variable such as `Q` or `N_p` still needs inline OMML when it is a quantity symbol.
+Do not skip inline math just because it is short. A single variable such as `Q`, `N`, `H`, `V`, or `N_p` still needs inline OMML when it is a quantity symbol.
 
 ## LaTeX Authoring Rules
 

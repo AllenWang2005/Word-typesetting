@@ -90,7 +90,7 @@ For DOCX edits, the skill can run a lightweight audit after formatting:
 python scripts/audit_docx_format.py path/to/report.docx
 ```
 
-The script flags common failures such as punctuation mismatches, abstract/keyword indentation, centered level-1 headings, direct non-12 pt table text, likely plain-text formulas or quantity symbols, non-ASCII citation brackets, and missing `REF ref_###` citation fields. It is intentionally domain-neutral: it does not hard-code any field-specific symbol list.
+The script flags common failures such as punctuation mismatches, abstract/keyword indentation, centered level-1 headings, direct non-12 pt table text, likely plain-text formulas or quantity symbols, bare one-letter quantity symbols in definition contexts such as `式中 Q 为流量，N 为出力`, non-ASCII citation brackets, and missing `REF ref_###` citation fields. It is intentionally domain-neutral: it does not hard-code any field-specific symbol list.
 
 Audit scope: the script inspects the main document story in `word/document.xml`. It does not currently audit separate headers, footers, footnotes, endnotes, comments, or embedded package parts; verify those visually or with a deeper OOXML pass when they matter.
 
