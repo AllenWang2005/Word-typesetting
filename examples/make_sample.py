@@ -14,8 +14,11 @@ has something to report:
   * a centered / indented abstract paragraph
   * table text that is not small-four (12 pt)
   * full-width and field-less citation brackets
+  * a bare superscript citation number with no brackets
   * plain-text formula / visible LaTeX instead of OMML
   * non-black body font color
+  * a heading in Songti that ends with punctuation
+  * a table caption placed below its table
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ import sys
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor
 
 
@@ -61,12 +65,21 @@ def build(path: str) -> None:
     sup.font.superscript = True
     bare.add_run("。")
 
+    # A heading in Songti (should be Heiti) that ends with punctuation (should not).
+    h2 = doc.add_paragraph(style="Heading 1")
+    run = h2.add_run("二、研究方法。")
+    run.font.name = "宋体"
+    run._element.get_or_add_rPr().get_or_add_rFonts().set(qn("w:eastAsia"), "宋体")
+
     # A table whose text is not small-four (12 pt).
     table = doc.add_table(rows=1, cols=2)
     for idx, label in enumerate(("方案", "流量")):
         cell = table.cell(0, idx)
         run = cell.paragraphs[0].add_run(label)
         run.font.size = Pt(14)  # -> w:sz=28, not the required 24
+
+    # A table caption placed BELOW the table (table captions belong above).
+    doc.add_paragraph("表 1-1 方案比较结果")
 
     doc.save(path)
     print(f"wrote {path}")

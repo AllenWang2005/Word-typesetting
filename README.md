@@ -1,24 +1,150 @@
 # Word Typesetting
 
-Allen's Codex skill for formal Chinese Word report formatting.
+A reusable **Codex / Claude Code skill** that formats formal Chinese Word (`.docx`)
+reports to a consistent academic standard — course designs, internship reports,
+thesis-style documents, and engineering calculation reports.
 
-This repository packages a reusable Codex and Claude Code skill that applies a consistent Word/DOCX formatting standard for course designs, internship reports, thesis-style documents, and engineering calculation reports.
+It is two things working together:
 
-## What This Skill Covers
+1. **A written standard** (`SKILL.md` + `references/`) that tells the model exactly
+   how a compliant report should look — typography, document structure, tables,
+   figures, formulas, citations, numbers/units.
+2. **Tooling** (`scripts/`) that *checks* a finished `.docx` against the machine-checkable
+   parts of that standard, and *auto-fixes* the safest issues.
 
-- Chinese body text in Songti/SimSun and English/numbers in Times New Roman, with a full font-size hierarchy (headings in Heiti, body in Songti)
-- Dominant-language punctuation normalization for Chinese or English documents, including special marks (ellipsis `……`, em dash `——`, book-title `《 》`), while preserving English punctuation inside English phrases, URLs, formulas, code, decimals, and citation brackets
-- Document structure and page setup: section order, A4 page margins/gutter, headers/footers, Roman-vs-Arabic page numbering via section breaks, and an auto-generated table of contents
-- Left-aligned Word heading styles with multilevel numbering bound to heading styles, plus widow/orphan control
-- White three-line tables (top/bottom rules ~1.5 pt, header rule ~0.75 pt), table text at small-four/12 pt and centered, captions above tables, header rows repeated across page breaks
-- Figures with captions below, by-chapter numbering (`图 1-1` / `表 2-3` / `式(1-1)`), and the "reference before appearance" rule
-- Numbers and units per GB 3100/3101/3102 and GB/T 15835
-- Formula discovery plus LaTeX-authored formulas, inline variables, and quantity symbols rendered into native Word OMML
-- Superscript, field-backed reference citations linked to bibliography entries, with bibliography entries formatted per GB/T 7714
-- Appendix code blocks with red comments
-- Pre-delivery checks for layout, punctuation, formulas, tables, figures, citations, and code appendices
+The model does the actual editing (with the general DOCX tooling); this skill supplies
+the rules, a completion checklist, and a guardrail so nothing obvious slips through.
 
-## Repository Structure
+---
+
+## What it can do
+
+**Typography & language**
+- Chinese body text in Songti/SimSun, English/numbers in Times New Roman, headings in Heiti.
+- A full font-size hierarchy (title 小二, H1 三号, H2 四号, H3 小四, body 小四, captions 五号, headers/footers/footnotes 小五).
+- Dominant-language punctuation normalization (Chinese vs. English), special marks (`……`, `——`, `《 》`), while protecting URLs, DOIs, code, formulas, decimals, and citation brackets.
+- Body justified, first-line indent 2 字符, 1.5× or fixed 20–22 pt line spacing.
+
+**Document structure & page setup**
+- Standard section order (cover → declarations → abstracts → TOC → body → references → appendix → acknowledgements).
+- A4 page setup, margins/gutter, headers/footers, Roman→Arabic page numbering via section breaks.
+- Auto-generated table of contents (with optional figure/table lists), multilevel heading numbering (`1 / 1.1 / 1.1.1`), widow/orphan control.
+- Headings left-aligned (title centered), no trailing punctuation, depth ≤ 3–4 levels.
+
+**Tables, figures, formulas**
+- White three-line tables (top/bottom rules ~1.5 pt, header rule ~0.75 pt), body small-four/12 pt and centered, **caption above the table**, header row repeated across page breaks.
+- Figures with **caption below**, by-chapter numbering (`图 1-1` / `表 2-3` / `(3-1)`), the "reference-before-appearance" rule.
+- Formulas authored as LaTeX and rendered to **native Word OMML** — variables italic, units/operators/functions upright; equation numbers right-aligned per chapter, cited as "由式 (3-1) 可得".
+
+**Citations & references**
+- In-text citations as superscript, **field-backed cross-references to the whole bracketed `[1]`** (brackets included, not a bare number).
+- Bibliography entries per **GB/T 7714—2015** (numeric sequential-coding by default; author-year supported), with the right type tags (`[J] [M] [D] [C] [S] [P] [EB/OL]` …).
+
+**Numbers, units, appendix code**
+- Space between number and unit (`20 m³/s`), GB 3100/3101/3102 units, GB/T 15835 numeral usage.
+- Appendix code after the main text with **red comments** (`C00000`).
+
+## What the result looks like
+
+A polished, navigable report: a clickable heading outline and an auto-updating TOC;
+left-aligned Heiti headings over Songti body text at a consistent size; clean white
+three-line tables with captions above and figures with captions below, all numbered
+by chapter; real Word equation objects instead of pasted images or plain text;
+superscript `[1]`-style citations that renumber themselves because they are Word
+cross-reference fields; and a GB/T 7714—2015 reference list. Running the auditor on a
+finished file prints `PASS: no machine-detected guardrail issues.`
+
+See [`examples/`](examples/) for a deliberately *non-compliant* sample and the audit
+report it produces — a concrete before/after of what the rules catch.
+
+## Install
+
+Install from GitHub:
+
+```text
+AllenWang2005/Word-typesetting
+```
+
+Or copy the folder into your skills directory:
+
+```text
+~/.codex/skills/word-report-formatting                 # Codex, macOS / Linux
+%USERPROFILE%\.codex\skills\word-report-formatting     # Codex, Windows
+~/.claude/skills/word-report-formatting                # Claude Code
+```
+
+## Use
+
+Ask the assistant to use the skill when creating or polishing a Word report:
+
+```text
+Use $word-report-formatting to format this course design report.
+```
+
+It also triggers naturally for formal Chinese Word reports, three-line tables, OMML
+formulas, figure/table captions, citation cross-references, or appendix code.
+
+## The audit script
+
+After formatting a DOCX, run the guardrail:
+
+```text
+python scripts/audit_docx_format.py path/to/report.docx
+python scripts/audit_docx_format.py path/to/report.docx --json   # machine-readable
+```
+
+It reports `FAIL` (machine-certain violations) and `WARN` (needs a human look), ends
+with a `FAIL/WARN` summary, and notes any per-code truncation. Checks include:
+
+| Code | Severity | What it catches |
+| --- | --- | --- |
+| `ZH_PUNCT` / `EN_PUNCT` | FAIL | Wrong-language punctuation in prose |
+| `ABSTRACT_INDENT` | FAIL | Abstract/keywords centered or indented |
+| `H1_CENTER` | FAIL | Level-1 heading centered instead of left-aligned |
+| `H1_GAP` | WARN | Level-1 heading missing a blank gap before it |
+| `HEADING_PUNCT` | WARN | Heading ends with punctuation |
+| `HEADING_FONT` / `BODY_FONT` | WARN | Heading in Songti / body in Heiti (direct fonts only) |
+| `TABLE_SIZE` | FAIL | Table text not small-four/12 pt |
+| `CAPTION_POSITION` | WARN | Table caption below table / figure caption above figure |
+| `COLOR` | WARN | Stray non-black font color (hyperlinks/theme colors excluded) |
+| `CITATION_BRACKETS` | FAIL | Full-width citation brackets `［1］` |
+| `CITATION_FIELDS` | FAIL | Citations exist but no `REF ref_###` fields |
+| `CITATION_NO_BRACKETS` | WARN | Bare superscript number citation missing its brackets |
+| `VISIBLE_LATEX` | FAIL | Visible LaTeX source instead of OMML |
+| `FORMULA_TEXT` | FAIL/WARN | Plain-text formula / quantity symbol that should be OMML |
+
+It is intentionally **domain-neutral** — no hard-coded field-specific symbol list.
+
+**Audit scope:** the script inspects the main document story in `word/document.xml`.
+It does not audit headers, footers, footnotes, endnotes, comments, or embedded parts —
+verify those visually or with a deeper OOXML pass when they matter.
+
+## The auto-fix script
+
+`scripts/normalize_docx.py` mechanically fixes the two safest issues — full-width
+citation brackets (`［1］` → `[1]`) and ASCII sentence punctuation between CJK
+characters (`中文,中文` → `中文，中文`) — preserving every other byte of the package:
+
+```text
+python scripts/normalize_docx.py report.docx -o report.fixed.docx
+python scripts/normalize_docx.py report.docx --in-place
+```
+
+It deliberately does **not** touch fonts, styles, formulas, or cross-references; those
+need judgement and stay with the model + the main standard.
+
+## Tests
+
+Standard library only (no third-party dependencies):
+
+```text
+python -m unittest discover -s tests -v
+```
+
+CI runs `py_compile` plus the test suite on Python 3.9 and 3.12 on every push
+(see `.github/workflows/ci.yml`).
+
+## Repository structure
 
 ```text
 .
@@ -27,99 +153,31 @@ This repository packages a reusable Codex and Claude Code skill that applies a c
 ├── agents/
 │   └── openai.yaml
 ├── references/
-│   ├── formatting-standard.md
-│   ├── document-structure-and-page-setup.md
-│   ├── latex-omml-formula-workflow.md
-│   ├── reference-style-gbt7714.md
-│   └── citation-crossrefs-ooxml.md
+│   ├── formatting-standard.md                  # main checklist
+│   ├── document-structure-and-page-setup.md    # structure, page setup, TOC, font sizes
+│   ├── latex-omml-formula-workflow.md          # LaTeX → Word OMML workflow
+│   ├── reference-style-gbt7714.md              # GB/T 7714—2015 bibliography format
+│   └── citation-crossrefs-ooxml.md             # in-text REF cross-reference OOXML
 ├── scripts/
-│   └── audit_docx_format.py
+│   ├── audit_docx_format.py                    # read-only guardrail
+│   └── normalize_docx.py                       # safe auto-fixer
 ├── examples/
 │   ├── README.md
 │   ├── make_sample.py
 │   └── sample-audit-output.txt
 └── tests/
-    └── test_audit_docx_format.py
+    ├── test_audit_docx_format.py
+    └── test_normalize_docx.py
 ```
 
-## Install
-
-Install this skill from the GitHub repository:
-
-```text
-AllenWang2005/Word-typesetting
-```
-
-If installing manually, copy the repository folder into your Codex skills directory:
-
-```text
-~/.codex/skills/word-report-formatting          # macOS / Linux
-%USERPROFILE%\.codex\skills\word-report-formatting   # Windows
-```
-
-## Use
-
-Ask Codex to use the skill when creating or polishing a Word report:
-
-```text
-Use $word-report-formatting to format this course design report.
-```
-
-The skill should also trigger naturally for tasks involving formal Chinese Word reports, three-line tables, OMML formulas, figure/table captions, or appendix code formatting.
-
-## Main Standard
-
-The full formatting checklist lives in:
-
-```text
-references/formatting-standard.md
-```
-
-Core rule for formulas:
-
-```text
-Formulas, inline variables, mathematical objects, and quantity symbols must
-be authored as LaTeX and rendered into native Word OMML. Manual italic text
-is not enough. Variables are italic; digits, operators, units, function names,
-constants, explanatory text, and explanatory subscripts are upright.
-```
-
-For DOCX edits, the skill can run a lightweight audit after formatting:
-
-```text
-python scripts/audit_docx_format.py path/to/report.docx
-```
-
-The script flags common failures such as punctuation mismatches, abstract/keyword indentation, centered level-1 headings, direct non-12 pt table text, likely plain-text formulas or quantity symbols, bare one-letter quantity symbols in definition contexts such as `式中 Q 为流量，N 为出力`, non-ASCII citation brackets, missing `REF ref_###` citation fields, and bare superscript citation numbers that dropped their `[ ]` brackets. It is intentionally domain-neutral: it does not hard-code any field-specific symbol list.
-
-Audit scope: the script inspects the main document story in `word/document.xml`. It does not currently audit separate headers, footers, footnotes, endnotes, comments, or embedded package parts; verify those visually or with a deeper OOXML pass when they matter.
-
-Use JSON output for CI or tool integration:
-
-```text
-python scripts/audit_docx_format.py path/to/report.docx --json
-```
-
-Text output ends with a `FAIL/WARN` summary and reports how many issues were omitted when a code exceeds the per-code display limit.
-
-## Examples
-
-See `examples/` for a runnable script (`make_sample.py`) that builds a deliberately non-compliant DOCX with python-docx, plus the captured audit output (`sample-audit-output.txt`) showing what the auditor reports.
-
-## Tests
-
-Run the test suite (standard library only, no extra dependencies):
-
-```text
-python -m unittest discover -s tests -v
-```
-
-CI runs `py_compile` plus these tests on every push (see `.github/workflows/ci.yml`).
-
-## Maintenance Notes
+## Maintenance notes
 
 - Keep `SKILL.md` concise so it loads quickly when the skill triggers.
-- Put detailed formatting rules in `references/`.
-- Keep `scripts/audit_docx_format.py` conservative: use `FAIL` only for machine-checkable violations and `WARN` for items that require visual review.
+- Put detailed rules in `references/`.
+- Keep the auditor conservative: `FAIL` only for machine-checkable violations, `WARN` for items needing visual review.
 - Do not store private information, credentials, or one-off chat history in this repository.
-- When the formatting standard changes, update the relevant reference file and refresh the short summary and paths in `SKILL.md`.
+- When the standard changes, update the relevant reference file and refresh the summary/paths in `SKILL.md`.
+
+## License
+
+[MIT](LICENSE).

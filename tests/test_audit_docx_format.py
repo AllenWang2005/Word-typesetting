@@ -7,10 +7,16 @@ Standard library only (unittest) so CI needs no third-party dependencies:
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
+import json
+import os
 import pathlib
 import sys
+import tempfile
 import unittest
+import zipfile
 from typing import Optional
 from xml.etree import ElementTree as ET
 
@@ -54,6 +60,24 @@ def make_runs_p(parts) -> ET.Element:
         rpr = '<w:rPr><w:vertAlign w:val="superscript"/></w:rPr>' if sup else ""
         runs += f'<w:r>{rpr}<w:t xml:space="preserve">{text}</w:t></w:r>'
     return ET.fromstring(f'<w:p xmlns:w="{W}">{runs}</w:p>')
+
+
+def make_p_with_font(text: str, eastasia: str, style: Optional[str] = None) -> ET.Element:
+    pstyle = f'<w:pStyle w:val="{style}"/>' if style else ""
+    ppr = f"<w:pPr>{pstyle}</w:pPr>" if pstyle else ""
+    xml = (
+        f'<w:p xmlns:w="{W}">{ppr}'
+        f'<w:r><w:rPr><w:rFonts w:eastAsia="{eastasia}"/></w:rPr>'
+        f'<w:t xml:space="preserve">{text}</w:t></w:r></w:p>'
+    )
+    return ET.fromstring(xml)
+
+
+def make_doc(body_inner: str) -> ET.Element:
+    return ET.fromstring(f'<w:document xmlns:w="{W}"><w:body>{body_inner}</w:body></w:document>')
+
+
+TABLE_XML = "<w:tbl><w:tr><w:tc><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"
 
 
 def codes(issues) -> set[str]:
@@ -179,6 +203,102 @@ class BareCitationTests(unittest.TestCase):
         issues = []
         aud.audit_bare_citations([make_runs_p([("断面面积为 100 m", False), ("2", True), ("。", False)])], issues)
         self.assertNotIn("CITATION_NO_BRACKETS", codes(issues))
+
+
+class HeadingPunctuationTests(unittest.TestCase):
+    def test_heading_with_trailing_punctuation_flagged(self):
+        issues = []
+        aud.audit_headings([make_p("二、研究方法。", style="Heading1")], issues)
+        self.assertIn("HEADING_PUNCT", codes(issues))
+
+    def test_heading_without_trailing_punctuation_ok(self):
+        issues = []
+        aud.audit_headings([make_p("二、研究方法", style="Heading1")], issues)
+        self.assertNotIn("HEADING_PUNCT", codes(issues))
+
+
+class FontTests(unittest.TestCase):
+    def test_heading_in_songti_flagged(self):
+        issues = []
+        aud.audit_fonts([make_p_with_font("研究方法", "宋体", style="Heading1")], issues)
+        self.assertIn("HEADING_FONT", codes(issues))
+
+    def test_body_in_heiti_flagged(self):
+        issues = []
+        aud.audit_fonts([make_p_with_font("这是一段正文内容", "黑体")], issues)
+        self.assertIn("BODY_FONT", codes(issues))
+
+    def test_correct_fonts_ok(self):
+        issues = []
+        aud.audit_fonts(
+            [make_p_with_font("研究方法", "黑体", style="Heading1"), make_p_with_font("这是正文", "宋体")],
+            issues,
+        )
+        self.assertEqual(codes(issues), set())
+
+
+class CaptionPositionTests(unittest.TestCase):
+    def test_table_caption_below_table_flagged(self):
+        root = make_doc(TABLE_XML + '<w:p><w:r><w:t>表 1-1 方案比较</w:t></w:r></w:p>')
+        issues = []
+        aud.audit_captions(root, issues)
+        self.assertIn("CAPTION_POSITION", codes(issues))
+
+    def test_table_caption_above_table_ok(self):
+        root = make_doc('<w:p><w:r><w:t>表 1-1 方案比较</w:t></w:r></w:p>' + TABLE_XML)
+        issues = []
+        aud.audit_captions(root, issues)
+        self.assertNotIn("CAPTION_POSITION", codes(issues))
+
+
+class ColorTests(unittest.TestCase):
+    def test_hyperlink_color_not_flagged_but_body_color_is(self):
+        root = make_doc(
+            '<w:p><w:hyperlink><w:r><w:rPr><w:color w:val="0563C1"/></w:rPr><w:t>link</w:t></w:r></w:hyperlink></w:p>'
+            '<w:p><w:r><w:rPr><w:color w:val="FF0000"/></w:rPr><w:t>red</w:t></w:r></w:p>'
+        )
+        issues = []
+        aud.audit_color(root, issues)
+        self.assertEqual(sum(1 for i in issues if i.code == "COLOR"), 1)
+
+
+class InputErrorTests(unittest.TestCase):
+    def test_non_docx_raises_audit_input_error(self):
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as handle:
+            handle.write(b"this is not a zip package")
+            path = handle.name
+        try:
+            with self.assertRaises(aud.AuditInputError):
+                aud.load_document_xml(pathlib.Path(path))
+        finally:
+            os.unlink(path)
+
+
+class JsonOutputTests(unittest.TestCase):
+    def test_json_output_has_expected_keys(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "min.docx")
+            document = (
+                f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                f'<w:document xmlns:w="{W}"><w:body>'
+                f'<w:p><w:r><w:t>这是一段用于测试输出结构的正常中文正文内容，全部使用中文标点符号，'
+                f'并且不包含任何明显的排版问题，因此机器审计的结果应当顺利通过检查。</w:t></w:r></w:p>'
+                f'</w:body></w:document>'
+            )
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("word/document.xml", document)
+            saved_argv = sys.argv
+            sys.argv = ["audit", path, "--json"]
+            buffer = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(buffer):
+                    return_code = aud.main()
+            finally:
+                sys.argv = saved_argv
+        payload = json.loads(buffer.getvalue())
+        for key in ("status", "scope", "summary", "issues"):
+            self.assertIn(key, payload)
+        self.assertEqual(return_code, 0)
 
 
 class SummaryTests(unittest.TestCase):

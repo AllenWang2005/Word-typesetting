@@ -32,6 +32,19 @@ CITATION_RE = re.compile(r"[\[［【]\s*\d+(?:\s*(?:,|，|-|–|—)\s*\d+)*\s*[
 FULLWIDTH_CITATION_RE = re.compile(r"[［【]\s*\d+(?:\s*(?:,|，|-|–|—)\s*\d+)*\s*[］】]")
 # A superscript citation number with its brackets stripped, e.g. a bare "1" or "1,2"/"1-3".
 SUPERSCRIPT_CITATION_RE = re.compile(r"^\d+(?:\s*[,，、\-–—]\s*\d+)*$")
+# Heading detection for font/punctuation checks. Uses heading styles plus the unambiguous
+# Chinese markers only (not the loose Arabic-number branch) to avoid flagging numbered prose.
+HEADING_STYLE_RE = re.compile(r"^(?:heading[1-9]|标题[1-9]|[1-9])$")
+STRICT_HEADING_TEXT_RE = re.compile(r"^(?:[一二三四五六七八九十]+[、.．]|第[一二三四五六七八九十0-9]+章)")
+HEADING_TRAILING_PUNCT_RE = re.compile(r"[。，、；：！,.;:!]$")
+# Font-family heuristics (Heiti vs Songti) for the heading/body font check.
+HEI_FONT_RE = re.compile(r"黑体|hei|yahei|heiti", re.I)
+SONG_FONT_RE = re.compile(r"宋|song|simsun|nsimsun|stsong", re.I)
+# Caption markers used for caption-position and body-font checks.
+TABLE_CAPTION_RE = re.compile(r"^表\s*\d")
+FIGURE_CAPTION_RE = re.compile(r"^图\s*\d")
+# Default Word hyperlink/visited-link colors that should not be flagged as stray color.
+HYPERLINK_COLOR_DEFAULTS = {"0563C1", "954F72", "0000FF", "0000EE", "1155CC"}
 CN_BIB_HEADING_RE = re.compile(r"^(?:第?[一二三四五六七八九十0-9]+(?:章|节)?[、.．]?)?(参考文献|参考资料)$")
 EN_BIB_HEADING_RE = re.compile(r"^(?:\d+[.)]?)?references$", re.I)
 VISIBLE_LATEX_RE = re.compile(r"\\(?:frac|sqrt|sum|prod|int|begin|mathrm|text|sin|exp|lg|max)|[_^]\{")
@@ -128,6 +141,23 @@ def paragraph_style(paragraph: ET.Element) -> str:
 
 def run_is_superscript(run: ET.Element) -> bool:
     return w_attr(run.find("w:rPr/w:vertAlign", NS), "val") == "superscript"
+
+
+def is_heading_style(style_id: str) -> bool:
+    normalized = re.sub(r"[\s_-]+", "", style_id).lower()
+    return bool(HEADING_STYLE_RE.match(normalized)) or normalized.startswith("heading")
+
+
+def is_heading(paragraph: ET.Element, text: str) -> bool:
+    return is_heading_style(paragraph_style(paragraph)) or bool(STRICT_HEADING_TEXT_RE.match(text))
+
+
+def run_text(run: ET.Element) -> str:
+    return "".join(node.text or "" for node in run.findall(".//w:t", NS))
+
+
+def run_eastasia_font(run: ET.Element) -> Optional[str]:
+    return w_attr(run.find("w:rPr/w:rFonts", NS), "eastAsia")
 
 
 def is_heading1_style(style_id: str) -> bool:
@@ -241,8 +271,102 @@ def audit_headings(
                     f"Level-1 heading may need a blank visual gap before it at paragraph {index}: {text[:80]}",
                     counts,
                 )
+        if text and is_heading(paragraph, text) and HEADING_TRAILING_PUNCT_RE.search(text):
+            add_issue(
+                issues,
+                "WARN",
+                "HEADING_PUNCT",
+                f"Heading ends with punctuation at paragraph {index}: {text[:80]}",
+                counts,
+            )
         if text:
             previous_text = text
+
+
+def audit_fonts(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """Flag the heading/body font swap (headings should be Heiti, body Songti).
+
+    Only direct run-level `w:rFonts` are inspected; fonts inherited from styles are not
+    visible in word/document.xml, so this is a WARN-level guardrail, not a full check.
+    """
+    for index, paragraph in enumerate(paragraphs, start=1):
+        text = paragraph_text(paragraph).strip()
+        if not text:
+            continue
+        heading = is_heading(paragraph, text)
+        caption = bool(TABLE_CAPTION_RE.match(text) or FIGURE_CAPTION_RE.match(text))
+        for run in paragraph.findall(".//w:r", NS):
+            if not run_text(run).strip():
+                continue
+            font = run_eastasia_font(run)
+            if not font:
+                continue
+            if heading and SONG_FONT_RE.search(font) and not HEI_FONT_RE.search(font):
+                add_issue(
+                    issues,
+                    "WARN",
+                    "HEADING_FONT",
+                    f"Heading paragraph {index} uses a Songti font '{font}'; headings should be Heiti.",
+                    counts,
+                )
+                break
+            if not heading and not caption and HEI_FONT_RE.search(font) and not SONG_FONT_RE.search(font):
+                add_issue(
+                    issues,
+                    "WARN",
+                    "BODY_FONT",
+                    f"Body paragraph {index} uses a Heiti font '{font}'; body text should be Songti.",
+                    counts,
+                )
+                break
+
+
+def audit_captions(root: ET.Element, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:
+    """Heuristic check: table captions go above tables, figure captions go below figures."""
+    body = root.find("w:body", NS)
+    if body is None:
+        return
+    items: list[str] = []
+    for child in list(body):
+        if child.tag == f"{W}tbl":
+            items.append("table")
+        elif child.tag == f"{W}p":
+            text = paragraph_text(child).strip()
+            if TABLE_CAPTION_RE.match(text):
+                items.append("tcap")
+            elif FIGURE_CAPTION_RE.match(text):
+                items.append("fcap")
+            elif (
+                child.find(".//w:drawing", NS) is not None
+                or child.find(".//w:pict", NS) is not None
+                or child.find(".//w:object", NS) is not None
+            ):
+                items.append("fig")
+            else:
+                items.append("para")
+    for i, kind in enumerate(items):
+        prev = items[i - 1] if i > 0 else None
+        nxt = items[i + 1] if i + 1 < len(items) else None
+        if kind == "tcap" and nxt != "table" and prev == "table":
+            add_issue(
+                issues,
+                "WARN",
+                "CAPTION_POSITION",
+                "A table caption appears below its table; table captions belong above the table.",
+                counts,
+            )
+        elif kind == "fcap" and prev != "fig" and nxt == "fig":
+            add_issue(
+                issues,
+                "WARN",
+                "CAPTION_POSITION",
+                "A figure caption appears above its figure; figure captions belong below the figure.",
+                counts,
+            )
 
 
 def audit_tables(root: ET.Element, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:
@@ -265,9 +389,16 @@ def audit_tables(root: ET.Element, issues: list[Issue], counts: Optional[dict[tu
 
 
 def audit_color(root: ET.Element, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:
+    # Colors inside hyperlinks are expected (blue link text), so exclude them.
+    hyperlink_colors = {id(c) for hl in root.findall(".//w:hyperlink", NS) for c in hl.findall(".//w:color", NS)}
     for color in root.findall(".//w:color", NS):
+        if id(color) in hyperlink_colors:
+            continue
+        if color.get(f"{W}themeColor"):
+            # Theme colors are template-driven; treat as intentional.
+            continue
         value = (w_attr(color, "val") or "").upper()
-        if value and value not in ("000000", "AUTO", "C00000"):
+        if value and value not in ("000000", "AUTO", "C00000") and value not in HYPERLINK_COLOR_DEFAULTS:
             add_issue(
                 issues,
                 "WARN",
@@ -463,8 +594,10 @@ def main() -> int:
     audit_punctuation(paragraphs[:bib_index], language, issues, issue_counts)
     audit_abstract_keywords(paragraphs, issues, issue_counts)
     audit_headings(paragraphs, issues, issue_counts)
+    audit_fonts(paragraphs[:bib_index], issues, issue_counts)
     audit_tables(root, issues, issue_counts)
     audit_color(root, issues, issue_counts)
+    audit_captions(root, issues, issue_counts)
     audit_citations(document_xml, body_text, issues, issue_counts)
     audit_bare_citations(paragraphs[:bib_index], issues, issue_counts)
     audit_formulas(paragraphs[:bib_index], issues, issue_counts)

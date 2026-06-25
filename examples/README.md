@@ -30,9 +30,22 @@ The sample intentionally violates several rules, so the auditor reports a mix of
 | `CITATION_FIELDS` | ASCII citation `[2]` with no backing `REF ref_###` field |
 | `CITATION_NO_BRACKETS` | Bare superscript `3` citation that dropped its `[ ]` brackets |
 | `TABLE_SIZE` | Table text set to 14 pt instead of small-four / 12 pt |
+| `HEADING_PUNCT` | Heading `二、研究方法。` ends with punctuation |
+| `HEADING_FONT` | Heading set in Songti instead of Heiti |
+| `CAPTION_POSITION` | Table caption placed below its table instead of above |
 
 A fully compliant document produces `PASS: no machine-detected guardrail issues.`
 
-> Note: the auditor is a guardrail for machine-checkable issues only. Visual rules
-> (caption above/below, line widths, page numbering, GB/T 7714 entry format) still
-> require human or rendered-PDF review per the main standard.
+## Auto-fix
+
+`scripts/normalize_docx.py` can mechanically fix the two safest issues
+(full-width citation brackets and ASCII punctuation between CJK characters):
+
+```bash
+python scripts/normalize_docx.py sample.docx -o sample.fixed.docx
+```
+
+> Note: the auditor is a guardrail for machine-checkable issues only. Some rules
+> (line widths, page numbering, GB/T 7714 entry format) still require human or
+> rendered-PDF review per the main standard. The font/caption checks are WARN-level
+> heuristics because fonts can come from styles and figures can be floated.
