@@ -6,14 +6,15 @@ This repository packages a reusable Codex skill that applies a consistent Word/D
 
 ## What This Skill Covers
 
-- Chinese body text in Songti/SimSun and English/numbers in Times New Roman
-- Dominant-language punctuation normalization for Chinese or English documents, while preserving English punctuation inside English phrases, URLs, formulas, code, decimals, and citation brackets
-- Left-aligned Word heading styles and outline levels for navigation and automatic TOC
-- Left-aligned abstract/keywords, black body text, and centered figure/table captions
-- White three-line tables without full grids or vertical lines, with table text at small-four/12 pt and nonconforming original tables normalized
+- Chinese body text in Songti/SimSun and English/numbers in Times New Roman, with a full font-size hierarchy (headings in Heiti, body in Songti)
+- Dominant-language punctuation normalization for Chinese or English documents, including special marks (ellipsis `……`, em dash `——`, book-title `《 》`), while preserving English punctuation inside English phrases, URLs, formulas, code, decimals, and citation brackets
+- Document structure and page setup: section order, A4 page margins/gutter, headers/footers, Roman-vs-Arabic page numbering via section breaks, and an auto-generated table of contents
+- Left-aligned Word heading styles with multilevel numbering bound to heading styles, plus widow/orphan control
+- White three-line tables (top/bottom rules ~1.5 pt, header rule ~0.75 pt), table text at small-four/12 pt and centered, captions above tables, header rows repeated across page breaks
+- Figures with captions below, by-chapter numbering (`图 1-1` / `表 2-3` / `式(1-1)`), and the "reference before appearance" rule
+- Numbers and units per GB 3100/3101/3102 and GB/T 15835
 - Formula discovery plus LaTeX-authored formulas, inline variables, and quantity symbols rendered into native Word OMML
-- Superscript, field-backed reference citations linked to bibliography entries
-- Consistent figure/table captions and numbering
+- Superscript, field-backed reference citations linked to bibliography entries, with bibliography entries formatted per GB/T 7714
 - Appendix code blocks with red comments
 - Pre-delivery checks for layout, punctuation, formulas, tables, figures, citations, and code appendices
 
@@ -22,15 +23,26 @@ This repository packages a reusable Codex skill that applies a consistent Word/D
 ```text
 .
 ├── SKILL.md
+├── LICENSE
 ├── agents/
 │   └── openai.yaml
 ├── references/
-    ├── formatting-standard.md
-    ├── latex-omml-formula-workflow.md
-    └── citation-crossrefs-ooxml.md
-└── scripts/
-    └── audit_docx_format.py
+│   ├── 20260625-formatting-standard.md
+│   ├── 20260625-document-structure-and-page-setup.md
+│   ├── 20260625-latex-omml-formula-workflow.md
+│   ├── 20260625-reference-style-gbt7714.md
+│   └── 20260625-citation-crossrefs-ooxml.md
+├── scripts/
+│   └── audit_docx_format.py
+├── examples/
+│   ├── README.md
+│   ├── make_sample.py
+│   └── sample-audit-output.txt
+└── tests/
+    └── test_audit_docx_format.py
 ```
+
+Reference documents are date-prefixed (`YYYYMMDD-`) so standard revisions are easy to track. When the standard changes, add new dated reference files and update the paths in `SKILL.md`.
 
 ## Install
 
@@ -40,10 +52,11 @@ Install this skill from the GitHub repository:
 AllenWang2005/Word-typesetting
 ```
 
-If installing manually, copy the repository folder into your Codex skills directory, for example:
+If installing manually, copy the repository folder into your Codex skills directory:
 
 ```text
-C:\Users\25102\.codex\skills\word-report-formatting
+~/.codex/skills/word-report-formatting          # macOS / Linux
+%USERPROFILE%\.codex\skills\word-report-formatting   # Windows
 ```
 
 ## Use
@@ -61,7 +74,7 @@ The skill should also trigger naturally for tasks involving formal Chinese Word 
 The full formatting checklist lives in:
 
 ```text
-references/formatting-standard.md
+references/20260625-formatting-standard.md
 ```
 
 Core rule for formulas:
@@ -79,12 +92,26 @@ For DOCX edits, the skill can run a lightweight audit after formatting:
 python scripts/audit_docx_format.py path/to/report.docx
 ```
 
-The script flags common failures such as punctuation mismatches, abstract/keyword indentation, centered level-1 headings, direct non-12 pt table text, likely plain-text formulas or quantity symbols, non-ASCII citation brackets, and missing `REF ref_###` citation fields.
+The script flags common failures such as punctuation mismatches, abstract/keyword indentation, centered level-1 headings, direct non-12 pt table text, likely plain-text formulas or quantity symbols, non-ASCII citation brackets, and missing `REF ref_###` citation fields. It is intentionally domain-neutral: it does not hard-code any field-specific symbol list.
+
+## Examples
+
+See `examples/` for a runnable script (`make_sample.py`) that builds a deliberately non-compliant DOCX with python-docx, plus the captured audit output (`sample-audit-output.txt`) showing what the auditor reports.
+
+## Tests
+
+Run the test suite (standard library only, no extra dependencies):
+
+```text
+python -m unittest discover -s tests -v
+```
+
+CI runs `py_compile` plus these tests on every push (see `.github/workflows/ci.yml`).
 
 ## Maintenance Notes
 
 - Keep `SKILL.md` concise so it loads quickly when the skill triggers.
-- Put detailed formatting rules in `references/formatting-standard.md`.
+- Put detailed formatting rules in the dated `references/` files.
 - Keep `scripts/audit_docx_format.py` conservative: use `FAIL` only for machine-checkable violations and `WARN` for items that require visual review.
 - Do not store private information, credentials, or one-off chat history in this repository.
-- When the formatting standard changes, update both `references/formatting-standard.md` and the short summary in `SKILL.md` if needed.
+- When the formatting standard changes, add a new dated reference file (or update an existing one) and refresh the short summary and paths in `SKILL.md`.

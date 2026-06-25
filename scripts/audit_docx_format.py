@@ -30,8 +30,14 @@ TEXT_EQUATION_RE = re.compile(
     r"(?<![A-Za-z])(?:[A-Za-z\u0370-\u03ff][A-Za-z0-9_{}\\]*|[A-Z])\s*(?:=|≤|≥|≈|<|>)"
 )
 TEXT_SUBSCRIPT_RE = re.compile(r"\b[A-Za-z\u0370-\u03ff]{1,4}_[A-Za-z0-9{}\\]+")
-SYMBOL_CONTEXT_RE = re.compile(r"(其中|式中|符号|变量|量符号|计算式|公式|表示|取|为)")
-BARE_QUANTITY_RE = re.compile(r"(?<![A-Za-z])(?:Q|N|N_p|Np|Z|V|T|H|P|R|Re|We|Ma|SNR|SN|I_i|T_N|T_D)(?![A-Za-z])")
+# Generic formula-context cues. Kept to strong indicators so ordinary prose (for example a
+# sentence that merely contains "为" or "取") is not misread as a formula.
+SYMBOL_CONTEXT_RE = re.compile(r"(式中|其中|符号|变量|量符号|计算式|公式)")
+# A generic quantity symbol: a single Latin or Greek letter carrying a subscript or superscript,
+# e.g. N_p, T_{N}, R_{\mathrm{SN}}, x^2. Domain-specific symbol lists are intentionally avoided so
+# the auditor stays general-purpose. A bare single letter with no sub/superscript is NOT treated as
+# a quantity symbol, which is what previously produced false positives such as "T 型" or "P 值".
+BARE_QUANTITY_RE = re.compile(r"(?<![A-Za-zͰ-Ͽ])[A-Za-zͰ-Ͽ][_^]\{?[A-Za-z0-9Ͱ-Ͽ]")
 
 PROTECTED_PATTERNS = [
     re.compile(r"https?://\S+", re.I),
