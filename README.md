@@ -2,7 +2,7 @@
 
 Allen's Codex skill for formal Chinese Word report formatting.
 
-This repository packages a reusable Codex skill that applies a consistent Word/DOCX formatting standard for course designs, internship reports, thesis-style documents, and engineering calculation reports.
+This repository packages a reusable Codex and Claude Code skill that applies a consistent Word/DOCX formatting standard for course designs, internship reports, thesis-style documents, and engineering calculation reports.
 
 ## What This Skill Covers
 
