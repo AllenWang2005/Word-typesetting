@@ -152,6 +152,16 @@ def is_heading(paragraph: ET.Element, text: str) -> bool:
     return is_heading_style(paragraph_style(paragraph)) or bool(STRICT_HEADING_TEXT_RE.match(text))
 
 
+def heading_level(paragraph: ET.Element, text: str) -> Optional[int]:
+    style = re.sub(r"[\s_-]+", "", paragraph_style(paragraph)).lower()
+    match = re.search(r"(?:heading|标题)([1-9])", style) or re.fullmatch(r"([1-9])", style)
+    if match:
+        return int(match.group(1))
+    if STRICT_HEADING_TEXT_RE.match(text):
+        return 1
+    return None
+
+
 def run_text(run: ET.Element) -> str:
     return "".join(node.text or "" for node in run.findall(".//w:t", NS))
 
@@ -298,6 +308,7 @@ def audit_fonts(
         if not text:
             continue
         heading = is_heading(paragraph, text)
+        level = heading_level(paragraph, text)
         caption = bool(TABLE_CAPTION_RE.match(text) or FIGURE_CAPTION_RE.match(text))
         for run in paragraph.findall(".//w:r", NS):
             if not run_text(run).strip():
@@ -305,12 +316,13 @@ def audit_fonts(
             font = run_eastasia_font(run)
             if not font:
                 continue
-            if heading and SONG_FONT_RE.search(font) and not HEI_FONT_RE.search(font):
+            # Level 1-2 headings should be Heiti; level-3 headings are intentionally bold Songti.
+            if level in (1, 2) and SONG_FONT_RE.search(font) and not HEI_FONT_RE.search(font):
                 add_issue(
                     issues,
                     "WARN",
                     "HEADING_FONT",
-                    f"Heading paragraph {index} uses a Songti font '{font}'; headings should be Heiti.",
+                    f"Level-1/2 heading paragraph {index} uses a Songti font '{font}'; they should be Heiti.",
                     counts,
                 )
                 break

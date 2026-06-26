@@ -11,7 +11,7 @@ FAIL FORMULA_TEXT: Paragraph 4 has likely formula/quantity-symbol text that shou
 FAIL VISIBLE_LATEX: Paragraph 5 contains visible LaTeX source instead of rendered Word OMML: 两者比值可用 \frac{a}{b} 表示，需要渲染为公式对象。
 WARN H1_GAP: Level-1 heading may need a blank visual gap before it at paragraph 8: 二、研究方法。
 WARN HEADING_PUNCT: Heading ends with punctuation at paragraph 8: 二、研究方法。
-WARN HEADING_FONT: Heading paragraph 8 uses a Songti font '宋体'; headings should be Heiti.
+WARN HEADING_FONT: Level-1/2 heading paragraph 8 uses a Songti font '宋体'; they should be Heiti.
 WARN COLOR: Found direct font color FF0000; verify it is intentional. Body/captions/tables/references should be black.
 WARN CAPTION_POSITION: A table caption appears below its table; table captions belong above the table.
 WARN CITATION_NO_BRACKETS: Paragraph 7 has a bare superscript number '3' with no brackets; a citation should be the whole bracketed [n], not a bare number.

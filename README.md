@@ -20,8 +20,8 @@ the rules, a completion checklist, and a guardrail so nothing obvious slips thro
 ## What it can do
 
 **Typography & language**
-- Chinese body text in Songti/SimSun, English/numbers in Times New Roman, headings in Heiti.
-- A full font-size hierarchy (title 小二, H1 三号, H2 四号, H3 小四, body 小四, captions 五号, headers/footers/footnotes 小五).
+- Chinese body text in Songti/SimSun, English/numbers in Times New Roman, level 1–2 headings in Heiti (not bold), level-3 headings in bold Songti.
+- A full font-size hierarchy (cover title 二号 Heiti bold; H1 三号 / H2 四号 Heiti; H3 小四 Songti bold; body 小四 Songti; captions 五号 Songti; headers/footers/footnotes 小五).
 - Dominant-language punctuation normalization (Chinese vs. English), special marks (`……`, `——`, `《 》`), while protecting URLs, DOIs, code, formulas, decimals, and citation brackets.
 - Body justified, first-line indent 2 字符, 1.5× or fixed 20–22 pt line spacing.
 
@@ -41,7 +41,7 @@ the rules, a completion checklist, and a guardrail so nothing obvious slips thro
 - Bibliography entries per **GB/T 7714—2015** (numeric sequential-coding by default; author-year supported), with the right type tags (`[J] [M] [D] [C] [S] [P] [EB/OL]` …).
 
 **Numbers, units, appendix code**
-- Space between number and unit (`20 m³/s`), GB 3100/3101/3102 units, GB/T 15835 numeral usage.
+- Half-width space between number and unit (`20 m³/s`) — except `%`, `°`, `℃`/`°C`, which attach directly (`50%`, `30°`, `25℃`); GB 3100/3101/3102 units, GB/T 15835 numeral usage.
 - Appendix code after the main text with **red comments** (`C00000`).
 
 ## What the result looks like

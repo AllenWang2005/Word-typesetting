@@ -34,7 +34,7 @@ Use this skill to format formal Chinese Word reports consistently with Allen's p
 ## Core Rules
 
 - Body text: Chinese in Songti/SimSun, English and numbers in Times New Roman, default small-four/12 pt.
-- Headings: real Word heading styles with outline levels, headings in bold Heiti/SimHei while the body stays Songti/SimSun, left aligned rather than centered. Use Word multilevel lists bound to heading styles for automatic `1 / 1.1 / 1.1.1` numbering, kept to about three or four levels. Headings carry no trailing punctuation; the document title is centered while section headings are left aligned. Level-1 Chinese headings such as `一、` / `二、` / `三、` must have one blank line of visual space before them when not at the top of a page, and must not sit alone at the bottom of a page.
+- Headings: real Word heading styles with outline levels — level 1–2 headings in Heiti (not bold), level-3 headings in bold Songti, body in Songti/SimSun; left aligned rather than centered. Use Word multilevel lists bound to heading styles for automatic `1 / 1.1 / 1.1.1` numbering, kept to about three or four levels. Headings carry no trailing punctuation; the document title is centered while section headings are left aligned. Level-1 Chinese headings such as `一、` / `二、` / `三、` need about half a line of space before them and must not sit alone at the bottom of a page.
 - Body punctuation: match the dominant document language. Chinese prose uses Chinese punctuation; English prose uses ASCII punctuation. Keep citation brackets ASCII `[` and `]`. Use the Chinese ellipsis `……`, em dash `——`, and book-title marks `《 》` where applicable.
 - Body color: keep body text, headings, captions, tables, formulas, abstract, keywords, and references black unless the user explicitly requests otherwise. Appendix code comments are the standard red exception.
 - Abstract and keywords: left aligned with left indent 0 and first-line indent 0.
@@ -42,7 +42,7 @@ Use this skill to format formal Chinese Word reports consistently with Allen's p
 - Figures: the figure caption goes **below** the figure, centered; keep plot titles out of the image when a Word caption is present.
 - Numbering: number figures, tables, and equations by chapter (`图 1-1`, `表 2-3`, `式(1-1)`); refer to them in text as “如图 1-1 所示” / “式(1-1)”. Figures and tables must appear **after** they are first referenced (proximity rule).
 - Formulas and symbols: author every formula, inline variable, math object, and quantity symbol in LaTeX and convert it to native Word OMML, including bare symbols such as `Q`, `N`, `H`, or `V` when they define or denote physical quantities. Variables are italic; digits, operators, units, function names, constants, explanatory text, and explanatory subscripts are upright.
-- Numbers and units: put a space between a number and its unit (`20 m³/s`); follow GB 3100/3101/3102 for units and GB/T 15835 for Arabic-vs-Chinese numeral usage.
+- Numbers and units: put a half-width space between a number and its unit (`20 m³/s`), except `%`, `°`, and `℃`/`°C`, which attach directly (`50%`, `30°`, `25℃`); follow GB 3100/3101/3102 for units and GB/T 15835 for Arabic-vs-Chinese numeral usage.
 - Citations: make body references superscript and field-backed, not merely static superscript text. Reference the whole bracketed `[1]` as one cross-reference unit (brackets included), not a bare number. Use ASCII square brackets `[` and `]`, not Chinese/full-width brackets. Format bibliography entries per GB/T 7714—2015.
 - Appendix code: put code after main text and tables; color code comments red, preferably `C00000`.
 
@@ -54,7 +54,7 @@ Use this skill as a completion checklist, not background guidance. Work in passe
 
 Fail the formatting pass and revise if any of these remain:
 
-- Section headings are centered when they should be left aligned (the document title is the centered exception), headings are not in Heiti while the body is Songti, or a heading ends with trailing punctuation.
+- Section headings are centered when they should be left aligned (the document title is the centered exception), level 1–2 headings are not in Heiti or are bold (level-3 headings are bold Songti), or a heading ends with trailing punctuation.
 - The dominant-language punctuation pass was skipped or left obvious mismatches in prose.
 - Chinese documents still contain ASCII commas, periods, colons, semicolons, question marks, exclamation marks, or quote marks in Chinese prose outside protected English/code/formula contexts; English documents still contain Chinese punctuation outside quoted Chinese source text.
 - Abstract or keywords are indented, centered, or have nonzero left/first-line indent.

@@ -228,6 +228,12 @@ class FontTests(unittest.TestCase):
         aud.audit_fonts([make_p_with_font("这是一段正文内容", "黑体")], issues)
         self.assertIn("BODY_FONT", codes(issues))
 
+    def test_level3_heading_in_songti_not_flagged(self):
+        # Level-3 headings are intentionally bold Songti, so Songti must not be flagged.
+        issues = []
+        aud.audit_fonts([make_p_with_font("研究细节", "宋体", style="Heading3")], issues)
+        self.assertNotIn("HEADING_FONT", codes(issues))
+
     def test_correct_fonts_ok(self):
         issues = []
         aud.audit_fonts(
