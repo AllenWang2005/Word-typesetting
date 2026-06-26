@@ -132,7 +132,9 @@ with a `FAIL/WARN` summary, and notes any per-code truncation. Checks include:
 | `H1_GAP` | WARN | Level-1 heading missing a blank gap before it |
 | `HEADING_PUNCT` | WARN | Heading ends with punctuation |
 | `HEADING_FONT` / `BODY_FONT` | WARN | Heading in Songti / body in Heiti (direct fonts only) |
+| `HEADING_NO_STYLE` | WARN | Heading-looking line that uses no Word heading style |
 | `TABLE_SIZE` | FAIL | Table text not 五号/10.5 pt (小四 ok; never larger than body) |
+| `TABLE_BORDERS` | WARN | Table has vertical/inner borders (not a three-line table) |
 | `CAPTION_POSITION` | WARN | Table caption below table / figure caption above figure |
 | `COLOR` | WARN | Stray non-black font color (hyperlinks/theme colors excluded) |
 | `CITATION_BRACKETS` | FAIL | Full-width citation brackets `［1］` |
@@ -145,7 +147,9 @@ It is intentionally **domain-neutral** — no hard-coded field-specific symbol l
 
 **Audit scope:** the script inspects the main document story in `word/document.xml`.
 It does not audit headers, footers, footnotes, endnotes, comments, or embedded parts —
-verify those visually or with a deeper OOXML pass when they matter.
+verify those visually or with a deeper OOXML pass when they matter. Table-cell text is
+checked for font size and borders only, not punctuation/heading/formula (this avoids
+false positives from numbers and short fragments in cells).
 
 ## The auto-fix script
 
@@ -178,6 +182,7 @@ CI runs `py_compile` plus the test suite on Python 3.9 and 3.12 on every push
 .
 ├── SKILL.md
 ├── LICENSE
+├── CHANGELOG.md
 ├── agents/
 │   └── openai.yaml
 ├── references/
@@ -191,12 +196,15 @@ CI runs `py_compile` plus the test suite on Python 3.9 and 3.12 on every push
 │   └── normalize_docx.py                       # safe auto-fixer
 ├── examples/
 │   ├── README.md
-│   ├── make_sample.py
-│   └── sample-audit-output.txt
+│   ├── make_sample.py                          # builds compliant / non-compliant samples
+│   ├── sample-audit-output.txt
+│   └── sample-compliant-audit-output.txt
 └── tests/
     ├── test_audit_docx_format.py
     └── test_normalize_docx.py
 ```
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the version history.
 
 ## Maintenance notes
 

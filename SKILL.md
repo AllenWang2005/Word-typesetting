@@ -9,7 +9,7 @@ description: Apply Allen's formal Word report formatting standard. Use when crea
 
 Use this skill to format formal Chinese Word reports consistently with Allen's preferred standard. It complements the general DOCX/document skill: use the document tooling for implementation and rendering, and use this skill for the required typography, formula, table, figure, reference/citation, and appendix-code rules.
 
-**Standard version: 2026-06-25.** Detailed rules live in `references/`:
+**Standard version: 2026-06-26.** Detailed rules live in `references/`:
 
 - `references/formatting-standard.md` — main formatting checklist (typography, language/punctuation, headings, tables, formulas, figures, numbers/units, citations, lists/footnotes, appendix code).
 - `references/document-structure-and-page-setup.md` — document structure and order, page setup, headers/footers, page numbering and sections, TOC, font-size hierarchy, multilevel numbering, widow/orphan control.

@@ -124,7 +124,9 @@ python scripts/audit_docx_format.py path/to/report.docx --json   # 机器可读
 | `H1_GAP` | WARN | 一级标题前缺少空行 |
 | `HEADING_PUNCT` | WARN | 标题末尾带标点 |
 | `HEADING_FONT` / `BODY_FONT` | WARN | 一二级标题用了宋体 / 正文用了黑体(仅查直接字体) |
+| `HEADING_NO_STYLE` | WARN | 看着像标题但没用 Word 标题样式 |
 | `TABLE_SIZE` | FAIL | 表内文字非五号/10.5 pt(小四亦可;不得大于正文) |
+| `TABLE_BORDERS` | WARN | 表格有竖线/内部网格(非三线表) |
 | `CAPTION_POSITION` | WARN | 表题在表下 / 图题在图上 |
 | `COLOR` | WARN | 多余的非黑色字体(已排除超链接/主题色) |
 | `CITATION_BRACKETS` | FAIL | 全角引用括号 `［1］` |
@@ -135,7 +137,7 @@ python scripts/audit_docx_format.py path/to/report.docx --json   # 机器可读
 
 它刻意保持**领域中立**——不写死任何学科专有符号表。
 
-**审计范围:** 脚本只检查 `word/document.xml` 主文档流,不检查页眉、页脚、脚注、尾注、批注或嵌入部件——这些需人工或更深的 OOXML 检查。
+**审计范围:** 脚本只检查 `word/document.xml` 主文档流,不检查页眉、页脚、脚注、尾注、批注或嵌入部件——这些需人工或更深的 OOXML 检查。表格单元格内的文字只查字号和边框,不查标点/标题/公式(以避免单元格里的数字和短片段造成误报)。
 
 ## 自动修复脚本
 
@@ -165,6 +167,7 @@ python -m unittest discover -s tests -v
 .
 ├── SKILL.md
 ├── LICENSE
+├── CHANGELOG.md
 ├── agents/
 │   └── openai.yaml
 ├── references/
@@ -178,12 +181,15 @@ python -m unittest discover -s tests -v
 │   └── normalize_docx.py                       # 安全自动修复
 ├── examples/
 │   ├── README.md
-│   ├── make_sample.py
-│   └── sample-audit-output.txt
+│   ├── make_sample.py                          # 生成合规 / 不合规样例
+│   ├── sample-audit-output.txt
+│   └── sample-compliant-audit-output.txt
 └── tests/
     ├── test_audit_docx_format.py
     └── test_normalize_docx.py
 ```
+
+版本历史见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ## 维护说明
 

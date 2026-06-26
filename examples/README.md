@@ -4,15 +4,22 @@ A minimal, reproducible demonstration of the audit script.
 
 ## Files
 
-- `make_sample.py` — builds a deliberately **non-compliant** `sample.docx` with python-docx.
-- `sample-audit-output.txt` — the captured output of running the auditor on that sample.
+- `make_sample.py` — builds a deliberately **non-compliant** `sample.docx` (or a **compliant** one with `--compliant`).
+- `sample-audit-output.txt` — captured auditor output on the non-compliant sample.
+- `sample-compliant-audit-output.txt` — captured auditor output on the compliant sample (`PASS`).
 
 ## Reproduce
 
 ```bash
-pip install python-docx          # only needed to build the sample
+pip install python-docx          # only needed to build the samples
+
+# Non-compliant sample → a mix of FAIL/WARN
 python examples/make_sample.py sample.docx
 python scripts/audit_docx_format.py sample.docx
+
+# Compliant sample → PASS
+python examples/make_sample.py --compliant sample-compliant.docx
+python scripts/audit_docx_format.py sample-compliant.docx
 ```
 
 The sample intentionally violates several rules, so the auditor reports a mix of
@@ -32,9 +39,13 @@ The sample intentionally violates several rules, so the auditor reports a mix of
 | `TABLE_SIZE` | Table text set to 14 pt instead of 五号 / 10.5 pt |
 | `HEADING_PUNCT` | Heading `二、研究方法。` ends with punctuation |
 | `HEADING_FONT` | Heading set in Songti instead of Heiti |
+| `HEADING_NO_STYLE` | A heading-looking line that uses no Word heading style |
 | `CAPTION_POSITION` | Table caption placed below its table instead of above |
 
-A fully compliant document produces `PASS: no machine-detected guardrail issues.`
+The auditor also flags `TABLE_BORDERS` (a table with direct vertical/inner borders
+instead of a three-line layout) — not shown in this sample.
+
+The compliant sample produces `PASS: no machine-detected guardrail issues.`
 
 ## Auto-fix
 

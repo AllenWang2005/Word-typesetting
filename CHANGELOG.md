@@ -1,0 +1,36 @@
+# Changelog
+
+All notable changes to this skill are documented here. The format is based on
+[Keep a Changelog](https://keepachangelog.com/), and the project uses semantic versioning.
+
+## [1.2.0] - 2026-06-26
+
+### Added
+- Auditor checks: `TABLE_BORDERS` (a table with direct vertical/inner borders instead of a three-line layout) and `HEADING_NO_STYLE` (a heading-looking line that uses no Word heading style, so it never enters the TOC).
+- A **compliant** example: `examples/make_sample.py --compliant` builds a document the auditor reports as `PASS`, with its captured output in `examples/sample-compliant-audit-output.txt`.
+- README font-size hierarchy table (English + 简体中文) and status badges (release, license, CI, stars).
+
+### Changed
+- Auditor: paragraph-based checks now **exclude table-cell text**, removing the `H1_CENTER`/`H1_GAP`/punctuation/formula false positives caused by numbers and short fragments in cells.
+- Auditor: tightened the bare-symbol formula heuristic so prose like "为 A 方案" / "取 N 个" is no longer flagged as a formula; `BODY_FONT` no longer flags centered cover titles.
+- Standard: default page margins are symmetric (~2.5 cm) with no binding gutter; standard version bumped to 2026-06-26.
+
+## [1.1.0] - 2026-06-26
+
+### Changed
+- Headings: level 1–2 in Heiti (not bold), level-3 in bold Songti, cover title 二号; line spacing default 1.5×.
+- Numbers & units: number–unit gap is a half-width (non-breaking) space; `%`, `°`, and `℃`/`°C` attach directly with no space.
+- Tables: content font 五号 (one size below the body; 小四 also accepted), table notes 小五.
+- Auditor: `TABLE_SIZE` accepts 五号/小四; `HEADING_FONT` limited to level 1–2 (level-3 is Songti by design); `COLOR` ignores hyperlink/theme colors.
+
+### Added
+- Bilingual README: `README.md` (English) and `README.zh-CN.md` (简体中文) with a language switcher.
+
+## [1.0.0] - 2026-06-25
+
+### Added
+- Initial release: the written standard (`SKILL.md` + `references/`), the `audit_docx_format.py` guardrail (punctuation, headings, fonts, captions, tables, citations, formulas; `--json` output and a FAIL/WARN summary), the `normalize_docx.py` safe auto-fixer, a non-compliant example, standard-library unit tests, and GitHub Actions CI.
+
+[1.2.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.2.0
+[1.1.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.1.0
+[1.0.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.0.0

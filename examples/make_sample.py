@@ -85,6 +85,49 @@ def build(path: str) -> None:
     print(f"wrote {path}")
 
 
+def build_compliant(path: str) -> None:
+    """Build a COMPLIANT sample that the auditor reports as PASS."""
+    doc = Document()
+
+    # Cover title: centered Heiti (per spec; the body-font check must not flag it).
+    title = doc.add_paragraph()
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    tr = title.add_run("某某水库水利计算课程设计")
+    tr.bold = True
+    tr.font.name = "黑体"
+    tr._element.get_or_add_rPr().get_or_add_rFonts().set(qn("w:eastAsia"), "黑体")
+
+    # Abstract: left aligned, no indent.
+    doc.add_paragraph("摘要：本文研究梯级水库的优化调度与防洪效益评估，比较多个方案并给出推荐结论。")
+
+    # Heading 1: real heading style, Heiti, no trailing punctuation, spacing before (no gap warning).
+    heading = doc.add_paragraph(style="Heading 1")
+    heading.paragraph_format.space_before = Pt(12)
+    hr = heading.add_run("一、绪论")
+    hr.font.name = "黑体"
+    hr._element.get_or_add_rPr().get_or_add_rFonts().set(qn("w:eastAsia"), "黑体")
+
+    # Body: Chinese prose with Chinese punctuation only.
+    doc.add_paragraph("本设计针对某流域的水利计算问题进行分析，比较多个方案的发电与防洪效益，并给出推荐方案。")
+
+    # Table caption ABOVE the table, centered.
+    cap = doc.add_paragraph("表 1-1 主要计算参数")
+    cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # Default table (no borders) with 五号 (10.5 pt) text.
+    table = doc.add_table(rows=2, cols=2)
+    for row in table.rows:
+        for cell in row.cells:
+            run = cell.paragraphs[0].add_run("参数")
+            run.font.size = Pt(10.5)  # 五号 -> w:sz=21
+
+    doc.save(path)
+    print(f"wrote {path}")
+
+
 if __name__ == "__main__":
-    out = sys.argv[1] if len(sys.argv) > 1 else "sample.docx"
-    build(out)
+    cli_args = sys.argv[1:]
+    compliant = "--compliant" in cli_args
+    paths = [arg for arg in cli_args if not arg.startswith("--")]
+    out = paths[0] if paths else ("sample-compliant.docx" if compliant else "sample.docx")
+    (build_compliant if compliant else build)(out)

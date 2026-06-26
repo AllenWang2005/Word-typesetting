@@ -20,7 +20,8 @@ W = f"{{{W_NS}}}"
 NS = {"w": W_NS, "m": M_NS}
 AUDIT_SCOPE = (
     "Main document story only: word/document.xml. Headers, footers, footnotes, "
-    "endnotes, comments, and separate embedded parts are not audited by this script."
+    "endnotes, comments, and separate embedded parts are not audited by this script. "
+    "Table-cell text is checked for font size and borders only, not punctuation/heading/formula."
 )
 
 CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
@@ -45,6 +46,13 @@ TABLE_CAPTION_RE = re.compile(r"^表\s*\d")
 FIGURE_CAPTION_RE = re.compile(r"^图\s*\d")
 # Default Word hyperlink/visited-link colors that should not be flagged as stray color.
 HYPERLINK_COLOR_DEFAULTS = {"0563C1", "954F72", "0000FF", "0000EE", "1155CC"}
+# High-precision "looks like a heading" markers for the heading-without-style check:
+# Chinese ordinals (一、), chapter/section words (第3章/第二节), or multilevel numbers (1.1 / 1.1.1).
+LOOKS_LIKE_HEADING_RE = re.compile(
+    r"^(?:[一二三四五六七八九十]+[、.．]|第[一二三四五六七八九十0-9]+[章节]|\d+\.\d+(?:\.\d+)?[ \t　])"
+)
+# Vertical / inner-vertical border tags: a three-line table must not have these.
+VERTICAL_BORDER_TAGS = ("left", "right", "insideV", "start", "end")
 CN_BIB_HEADING_RE = re.compile(r"^(?:第?[一二三四五六七八九十0-9]+(?:章|节)?[、.．]?)?(参考文献|参考资料)$")
 EN_BIB_HEADING_RE = re.compile(r"^(?:\d+[.)]?)?references$", re.I)
 VISIBLE_LATEX_RE = re.compile(r"\\(?:frac|sqrt|sum|prod|int|begin|mathrm|text|sin|exp|lg|max)|[_^]\{")
@@ -59,9 +67,12 @@ SYMBOL_CONTEXT_RE = re.compile(r"(式中|其中|符号|变量|量符号|计算�
 # stays general-purpose and catches unknown engineering symbols instead of only hydraulics terms.
 SUBSCRIPT_OR_SUPERSCRIPT_QUANTITY_RE = re.compile(r"(?<![A-Za-zͰ-Ͽ])[A-Za-zͰ-Ͽ][_^]\{?[A-Za-z0-9Ͱ-Ͽ]")
 BARE_QUANTITY_SYMBOL_RE = re.compile(r"(?<![A-Za-zͰ-Ͽ])[A-Za-zͰ-Ͽ](?![A-Za-zͰ-Ͽ])")
+# A bare symbol definition. Branch 1 (symbol BEFORE the verb) keeps the strong cues 为/表示/=
+# ("Q 为流量", "x ="). Branch 2 (verb BEFORE the symbol) only uses the unambiguous 记为/表示为/定义为,
+# so ordinary prose such as "为 A 方案" or "取 N 个" is no longer misread as a formula.
 BARE_SYMBOL_DEFINITION_RE = re.compile(
-    r"(?<![A-Za-zͰ-Ͽ])([A-Za-zͰ-Ͽ])(?![A-Za-zͰ-Ͽ])\s*(?:为|表示|是|取|=)"
-    r"|(?:记为|表示为|表示|为|取)\s*([A-Za-zͰ-Ͽ])(?![A-Za-zͰ-Ͽ])"
+    r"(?<![A-Za-zͰ-Ͽ])([A-Za-zͰ-Ͽ])(?![A-Za-zͰ-Ͽ])\s*(?:为|表示|=)"
+    r"|(?:记为|表示为|定义为)\s*([A-Za-zͰ-Ͽ])(?![A-Za-zͰ-Ͽ])"
 )
 
 PROTECTED_PATTERNS = [
@@ -310,6 +321,8 @@ def audit_fonts(
         heading = is_heading(paragraph, text)
         level = heading_level(paragraph, text)
         caption = bool(TABLE_CAPTION_RE.match(text) or FIGURE_CAPTION_RE.match(text))
+        # Cover titles and other centered display lines are not body prose; skip the body-font check.
+        centered = paragraph_alignment(paragraph) == "center"
         for run in paragraph.findall(".//w:r", NS):
             if not run_text(run).strip():
                 continue
@@ -326,7 +339,7 @@ def audit_fonts(
                     counts,
                 )
                 break
-            if not heading and not caption and HEI_FONT_RE.search(font) and not SONG_FONT_RE.search(font):
+            if not heading and not caption and not centered and HEI_FONT_RE.search(font) and not SONG_FONT_RE.search(font):
                 add_issue(
                     issues,
                     "WARN",
@@ -420,6 +433,54 @@ def audit_color(root: ET.Element, issues: list[Issue], counts: Optional[dict[tup
                 f"Found direct font color {value}; verify it is intentional. Body/captions/tables/references should be black.",
                 counts,
             )
+
+
+def audit_heading_styles(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """Warn when a paragraph looks like a heading but uses no Word heading style.
+
+    Such pseudo-headings do not enter the navigation pane or an auto-generated TOC.
+    """
+    for index, paragraph in enumerate(paragraphs, start=1):
+        text = paragraph_text(paragraph).strip()
+        if not text or len(text) > 40:
+            continue
+        if LOOKS_LIKE_HEADING_RE.match(text) and not is_heading_style(paragraph_style(paragraph)):
+            add_issue(
+                issues,
+                "WARN",
+                "HEADING_NO_STYLE",
+                f"Paragraph {index} looks like a heading but uses no Word heading style (won't enter the TOC): {text[:60]}",
+                counts,
+            )
+
+
+def border_is_visible(border: Optional[ET.Element]) -> bool:
+    if border is None:
+        return False
+    return (w_attr(border, "val") or "").lower() not in ("", "none", "nil")
+
+
+def audit_table_borders(root: ET.Element, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:
+    """Warn when a table has visible vertical/inner borders instead of a three-line layout."""
+    for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
+        sources = [table.find("w:tblPr/w:tblBorders", NS)]
+        sources.extend(table.findall(".//w:tc/w:tcPr/w:tcBorders", NS))
+        for borders in sources:
+            if borders is None:
+                continue
+            if any(border_is_visible(borders.find(f"w:{tag}", NS)) for tag in VERTICAL_BORDER_TAGS):
+                add_issue(
+                    issues,
+                    "WARN",
+                    "TABLE_BORDERS",
+                    f"Table {table_index} has vertical/inner borders; use a white three-line table (top, header, bottom rules only).",
+                    counts,
+                )
+                break
 
 
 def audit_citations(
@@ -596,7 +657,11 @@ def main() -> int:
             print(f"ERROR: {message}", file=sys.stderr)
         return 2
 
-    paragraphs = root.findall(".//w:body//w:p", NS)
+    all_paragraphs = root.findall(".//w:body//w:p", NS)
+    # Paragraph-based checks audit the main story only; table-cell paragraphs are excluded because
+    # numbers/units/short fragments in cells produced many heading/punctuation/formula false positives.
+    table_paragraph_ids = {id(p) for table in root.findall(".//w:tbl", NS) for p in table.findall(".//w:p", NS)}
+    paragraphs = [p for p in all_paragraphs if id(p) not in table_paragraph_ids]
     texts = [paragraph_text(paragraph) for paragraph in paragraphs]
     bib_index = next((index for index, text in enumerate(texts) if is_bibliography_heading(text)), len(texts))
     body_text = "\n".join(texts[:bib_index])
@@ -608,8 +673,10 @@ def main() -> int:
     audit_punctuation(paragraphs[:bib_index], language, issues, issue_counts)
     audit_abstract_keywords(paragraphs, issues, issue_counts)
     audit_headings(paragraphs, issues, issue_counts)
+    audit_heading_styles(paragraphs[:bib_index], issues, issue_counts)
     audit_fonts(paragraphs[:bib_index], issues, issue_counts)
     audit_tables(root, issues, issue_counts)
+    audit_table_borders(root, issues, issue_counts)
     audit_color(root, issues, issue_counts)
     audit_captions(root, issues, issue_counts)
     audit_citations(document_xml, body_text, issues, issue_counts)

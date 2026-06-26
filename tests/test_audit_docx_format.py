@@ -62,15 +62,37 @@ def make_runs_p(parts) -> ET.Element:
     return ET.fromstring(f'<w:p xmlns:w="{W}">{runs}</w:p>')
 
 
-def make_p_with_font(text: str, eastasia: str, style: Optional[str] = None) -> ET.Element:
-    pstyle = f'<w:pStyle w:val="{style}"/>' if style else ""
-    ppr = f"<w:pPr>{pstyle}</w:pPr>" if pstyle else ""
+def make_p_with_font(text: str, eastasia: str, style: Optional[str] = None, jc: Optional[str] = None) -> ET.Element:
+    inner = ""
+    if style:
+        inner += f'<w:pStyle w:val="{style}"/>'
+    if jc:
+        inner += f'<w:jc w:val="{jc}"/>'
+    ppr = f"<w:pPr>{inner}</w:pPr>" if inner else ""
     xml = (
         f'<w:p xmlns:w="{W}">{ppr}'
         f'<w:r><w:rPr><w:rFonts w:eastAsia="{eastasia}"/></w:rPr>'
         f'<w:t xml:space="preserve">{text}</w:t></w:r></w:p>'
     )
     return ET.fromstring(xml)
+
+
+def run_main_json(body_inner: str) -> dict:
+    """Write a minimal DOCX with the given <w:body> inner XML and run main --json."""
+    with tempfile.TemporaryDirectory() as folder:
+        path = os.path.join(folder, "doc.docx")
+        document = f'<w:document xmlns:w="{W}"><w:body>{body_inner}</w:body></w:document>'
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr("word/document.xml", document)
+        saved_argv = sys.argv
+        sys.argv = ["audit", path, "--json", "--language", "zh"]
+        buffer = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buffer):
+                aud.main()
+        finally:
+            sys.argv = saved_argv
+    return json.loads(buffer.getvalue())
 
 
 def make_doc(body_inner: str) -> ET.Element:
@@ -150,6 +172,12 @@ class FormulaTests(unittest.TestCase):
         ]
         aud.audit_formulas(prose, issues)
         self.assertEqual(codes(issues), set())
+
+    def test_label_prose_not_flagged(self):
+        # Regression: "为 A 方案" / "取 N 个" are labels, not symbol definitions.
+        issues = []
+        aud.audit_formulas([make_p("本设计的最优方案为 A 方案，故取 N 个代表性断面。")], issues)
+        self.assertNotIn("FORMULA_TEXT", codes(issues))
 
 
 class CitationTests(unittest.TestCase):
@@ -233,6 +261,60 @@ class FontTests(unittest.TestCase):
         issues = []
         aud.audit_fonts([make_p_with_font("研究细节", "宋体", style="Heading3")], issues)
         self.assertNotIn("HEADING_FONT", codes(issues))
+
+    def test_centered_heiti_cover_title_not_flagged(self):
+        # The cover title is Heiti by spec; being centered, it must not be flagged as body.
+        issues = []
+        aud.audit_fonts([make_p_with_font("某某水库水利计算课程设计", "黑体", jc="center")], issues)
+        self.assertNotIn("BODY_FONT", codes(issues))
+
+
+class HeadingNoStyleTests(unittest.TestCase):
+    def test_heading_like_text_without_style_flagged(self):
+        issues = []
+        aud.audit_heading_styles([make_p("1.1 研究背景")], issues)
+        self.assertIn("HEADING_NO_STYLE", codes(issues))
+
+    def test_heading_like_text_with_style_ok(self):
+        issues = []
+        aud.audit_heading_styles([make_p("1.1 研究背景", style="Heading2")], issues)
+        self.assertNotIn("HEADING_NO_STYLE", codes(issues))
+
+    def test_numbered_prose_not_flagged(self):
+        issues = []
+        aud.audit_heading_styles([make_p("2020 年完成了大量基础工作并取得成果")], issues)
+        self.assertNotIn("HEADING_NO_STYLE", codes(issues))
+
+
+class TableBordersTests(unittest.TestCase):
+    def _table(self, vertical_border: bool) -> ET.Element:
+        borders = '<w:tcBorders><w:left w:val="single" w:sz="4"/></w:tcBorders>' if vertical_border else ""
+        return make_doc(
+            f'<w:tbl><w:tr><w:tc><w:tcPr>{borders}</w:tcPr><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+        )
+
+    def test_vertical_border_flagged(self):
+        issues = []
+        aud.audit_table_borders(self._table(True), issues)
+        self.assertIn("TABLE_BORDERS", codes(issues))
+
+    def test_three_line_table_ok(self):
+        issues = []
+        aud.audit_table_borders(self._table(False), issues)
+        self.assertNotIn("TABLE_BORDERS", codes(issues))
+
+
+class TableCellExclusionTests(unittest.TestCase):
+    def test_numeric_table_cell_not_flagged_as_heading(self):
+        body = (
+            '<w:tbl><w:tr><w:tc><w:p><w:pPr><w:jc w:val="center"/></w:pPr>'
+            '<w:r><w:t>12.5</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+            '<w:p><w:r><w:t>这是一段正文，用于让文档不为空并被识别为中文。</w:t></w:r></w:p>'
+        )
+        payload = run_main_json(body)
+        result_codes = {issue["code"] for issue in payload["issues"]}
+        self.assertNotIn("H1_CENTER", result_codes)
+        self.assertNotIn("H1_GAP", result_codes)
 
     def test_correct_fonts_ok(self):
         issues = []

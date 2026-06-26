@@ -1,0 +1,4 @@
+Document language: zh (CJK chars=97, Latin letters=0, OMML objects=0)
+Audit scope: Main document story only: word/document.xml. Headers, footers, footnotes, endnotes, comments, and separate embedded parts are not audited by this script. Table-cell text is checked for font size and borders only, not punctuation/heading/formula.
+PASS: no machine-detected guardrail issues.
+Summary: FAIL=0 WARN=0 printed=0 omitted=0
