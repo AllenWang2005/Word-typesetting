@@ -38,7 +38,7 @@ Use this skill to format formal Chinese Word reports consistently with Allen's p
 - Body punctuation: match the dominant document language. Chinese prose uses Chinese punctuation; English prose uses ASCII punctuation. Keep citation brackets ASCII `[` and `]`. Use the Chinese ellipsis `……`, em dash `——`, and book-title marks `《 》` where applicable.
 - Body color: keep body text, headings, captions, tables, formulas, abstract, keywords, and references black unless the user explicitly requests otherwise. Appendix code comments are the standard red exception.
 - Abstract and keywords: left aligned with left indent 0 and first-line indent 0.
-- Tables: white three-line tables — no fill, no vertical lines, no full grid; top/bottom rules ~1.5 pt and the header rule ~0.75 pt. Table text small-four/12 pt and centered by default; units go in the header. The table caption goes **above** the table, centered. Repeat the header row across page breaks; do not split a table mid-row. Normalize existing tables that do not meet the standard.
+- Tables: white three-line tables — no fill, no vertical lines, no full grid; top/bottom rules ~1.5 pt and the header rule ~0.75 pt. Table text 五号/10.5 pt (one size below the body; 小四 also accepted, never larger than body) and centered by default; units go in the header. The table caption goes **above** the table, centered. Repeat the header row across page breaks; do not split a table mid-row. Normalize existing tables that do not meet the standard.
 - Figures: the figure caption goes **below** the figure, centered; keep plot titles out of the image when a Word caption is present.
 - Numbering: number figures, tables, and equations by chapter (`图 1-1`, `表 2-3`, `式(1-1)`); refer to them in text as “如图 1-1 所示” / “式(1-1)”. Figures and tables must appear **after** they are first referenced (proximity rule).
 - Formulas and symbols: author every formula, inline variable, math object, and quantity symbol in LaTeX and convert it to native Word OMML, including bare symbols such as `Q`, `N`, `H`, or `V` when they define or denote physical quantities. Variables are italic; digits, operators, units, function names, constants, explanatory text, and explanatory subscripts are upright.
@@ -62,7 +62,7 @@ Fail the formatting pass and revise if any of these remain:
 - A table caption is not above its table, or a figure caption is not below its figure, or figure/table names are not centered.
 - Figures, tables, or equations are not numbered by chapter, or a figure/table appears before it is first referenced in the text.
 - Level-1 Chinese headings do not have a blank-line visual gap before them when they follow body text, or a heading is stranded at the bottom of a page.
-- Table text is not small-four/12 pt, unless the user or official template explicitly requires a different size.
+- Table text is larger than the body or not the expected 五号/10.5 pt (小四/12 pt also accepted), unless the user or official template explicitly requires a different size.
 - Formulas, inline variables, quantity symbols, subscripts/superscripts, or math objects remain as ordinary styled text instead of LaTeX-rendered Word OMML, including bare one-letter quantity symbols in `式中` / `其中` / `表示` / `为` definition contexts.
 - A document with formulas/symbols was edited without a formula discovery pass and a LaTeX source list/registry.
 - Existing tables, formulas, variables, units, or symbols still violate the standard.

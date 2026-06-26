@@ -32,7 +32,7 @@ the rules, a completion checklist, and a guardrail so nothing obvious slips thro
 - Headings left-aligned (title centered), no trailing punctuation, depth ≤ 3–4 levels.
 
 **Tables, figures, formulas**
-- White three-line tables (top/bottom rules ~1.5 pt, header rule ~0.75 pt), body small-four/12 pt and centered, **caption above the table**, header row repeated across page breaks.
+- White three-line tables (top/bottom rules ~1.5 pt, header rule ~0.75 pt), content 五号/10.5 pt (one size below body) and centered, **caption above the table**, header row repeated across page breaks.
 - Figures with **caption below**, by-chapter numbering (`图 1-1` / `表 2-3` / `(3-1)`), the "reference-before-appearance" rule.
 - Formulas authored as LaTeX and rendered to **native Word OMML** — variables italic, units/operators/functions upright; equation numbers right-aligned per chapter, cited as "由式 (3-1) 可得".
 
@@ -104,7 +104,7 @@ with a `FAIL/WARN` summary, and notes any per-code truncation. Checks include:
 | `H1_GAP` | WARN | Level-1 heading missing a blank gap before it |
 | `HEADING_PUNCT` | WARN | Heading ends with punctuation |
 | `HEADING_FONT` / `BODY_FONT` | WARN | Heading in Songti / body in Heiti (direct fonts only) |
-| `TABLE_SIZE` | FAIL | Table text not small-four/12 pt |
+| `TABLE_SIZE` | FAIL | Table text not 五号/10.5 pt (小四 ok; never larger than body) |
 | `CAPTION_POSITION` | WARN | Table caption below table / figure caption above figure |
 | `COLOR` | WARN | Stray non-black font color (hyperlinks/theme colors excluded) |
 | `CITATION_BRACKETS` | FAIL | Full-width citation brackets `［1］` |

@@ -257,6 +257,29 @@ class CaptionPositionTests(unittest.TestCase):
         self.assertNotIn("CAPTION_POSITION", codes(issues))
 
 
+class TableSizeTests(unittest.TestCase):
+    def _table(self, sz: str) -> ET.Element:
+        return make_doc(
+            f'<w:tbl><w:tr><w:tc><w:p><w:r><w:rPr><w:sz w:val="{sz}"/></w:rPr>'
+            f'<w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+        )
+
+    def test_wuhao_accepted(self):
+        issues = []
+        aud.audit_tables(self._table("21"), issues)  # 五号
+        self.assertNotIn("TABLE_SIZE", codes(issues))
+
+    def test_xiaosi_accepted(self):
+        issues = []
+        aud.audit_tables(self._table("24"), issues)  # 小四
+        self.assertNotIn("TABLE_SIZE", codes(issues))
+
+    def test_oversized_table_text_flagged(self):
+        issues = []
+        aud.audit_tables(self._table("28"), issues)  # 四号, larger than body
+        self.assertIn("TABLE_SIZE", codes(issues))
+
+
 class ColorTests(unittest.TestCase):
     def test_hyperlink_color_not_flagged_but_body_color_is(self):
         root = make_doc(

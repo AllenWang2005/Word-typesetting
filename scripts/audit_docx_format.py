@@ -389,12 +389,14 @@ def audit_tables(root: ET.Element, issues: list[Issue], counts: Optional[dict[tu
             size = w_attr(run.find("w:rPr/w:sz", NS), "val")
             size_cs = w_attr(run.find("w:rPr/w:szCs", NS), "val")
             for value in (size, size_cs):
-                if value not in (None, "24"):
+                # Table text should be 五号 (w:sz=21); 小四 (24) is also accepted. Anything
+                # else (especially larger than the body) is flagged.
+                if value not in (None, "21", "24"):
                     add_issue(
                         issues,
                         "FAIL",
                         "TABLE_SIZE",
-                        f"Table {table_index} has direct font size {value}; expected small-four/12 pt (w:sz=24).",
+                        f"Table {table_index} has direct font size {value}; expected 五号/10.5 pt (w:sz=21; 小四/24 also accepted).",
                         counts,
                     )
                     break

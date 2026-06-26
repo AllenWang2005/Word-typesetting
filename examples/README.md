@@ -29,7 +29,7 @@ The sample intentionally violates several rules, so the auditor reports a mix of
 | `CITATION_BRACKETS` | Full-width citation brackets `［1］` |
 | `CITATION_FIELDS` | ASCII citation `[2]` with no backing `REF ref_###` field |
 | `CITATION_NO_BRACKETS` | Bare superscript `3` citation that dropped its `[ ]` brackets |
-| `TABLE_SIZE` | Table text set to 14 pt instead of small-four / 12 pt |
+| `TABLE_SIZE` | Table text set to 14 pt instead of 五号 / 10.5 pt |
 | `HEADING_PUNCT` | Heading `二、研究方法。` ends with punctuation |
 | `HEADING_FONT` | Heading set in Songti instead of Heiti |
 | `CAPTION_POSITION` | Table caption placed below its table instead of above |
