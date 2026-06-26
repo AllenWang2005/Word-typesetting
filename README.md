@@ -2,6 +2,12 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
+[![Release](https://img.shields.io/github/v/release/AllenWang2005/Word-typesetting?label=release)](https://github.com/AllenWang2005/Word-typesetting/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/AllenWang2005/Word-typesetting/actions/workflows/ci.yml/badge.svg)](https://github.com/AllenWang2005/Word-typesetting/actions/workflows/ci.yml)
+[![Stars](https://img.shields.io/github/stars/AllenWang2005/Word-typesetting?style=flat)](https://github.com/AllenWang2005/Word-typesetting/stargazers)
+![Skill](https://img.shields.io/badge/skill-Codex%20%7C%20Claude%20Code-7c3aed)
+
 A reusable **Codex / Claude Code skill** that formats formal Chinese Word (`.docx`)
 reports to a consistent academic standard — course designs, internship reports,
 thesis-style documents, and engineering calculation reports.

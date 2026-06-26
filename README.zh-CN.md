@@ -2,6 +2,12 @@
 
 [English](README.md) · **简体中文**
 
+[![Release](https://img.shields.io/github/v/release/AllenWang2005/Word-typesetting?label=release)](https://github.com/AllenWang2005/Word-typesetting/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/AllenWang2005/Word-typesetting/actions/workflows/ci.yml/badge.svg)](https://github.com/AllenWang2005/Word-typesetting/actions/workflows/ci.yml)
+[![Stars](https://img.shields.io/github/stars/AllenWang2005/Word-typesetting?style=flat)](https://github.com/AllenWang2005/Word-typesetting/stargazers)
+![Skill](https://img.shields.io/badge/skill-Codex%20%7C%20Claude%20Code-7c3aed)
+
 一个可复用的 **Codex / Claude Code 技能(skill)**,把正式的中文 Word(`.docx`)报告
 排成统一的学术规范——适用于课程设计、实习报告、论文式文档、工程计算报告等。
 
