@@ -1,5 +1,7 @@
 # Word Typesetting
 
+**English** · [简体中文](README.zh-CN.md)
+
 A reusable **Codex / Claude Code skill** that formats formal Chinese Word (`.docx`)
 reports to a consistent academic standard — course designs, internship reports,
 thesis-style documents, and engineering calculation reports.
@@ -23,7 +25,7 @@ the rules, a completion checklist, and a guardrail so nothing obvious slips thro
 - Chinese body text in Songti/SimSun, English/numbers in Times New Roman, level 1–2 headings in Heiti (not bold), level-3 headings in bold Songti.
 - A full font-size hierarchy (cover title 二号 Heiti bold; H1 三号 / H2 四号 Heiti; H3 小四 Songti bold; body 小四 Songti; captions 五号 Songti; headers/footers/footnotes 小五).
 - Dominant-language punctuation normalization (Chinese vs. English), special marks (`……`, `——`, `《 》`), while protecting URLs, DOIs, code, formulas, decimals, and citation brackets.
-- Body justified, first-line indent 2 字符, 1.5× or fixed 20–22 pt line spacing.
+- Body justified, first-line indent 2 字符, 1.5× line spacing.
 
 **Document structure & page setup**
 - Standard section order (cover → declarations → abstracts → TOC → body → references → appendix → acknowledgements).
