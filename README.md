@@ -23,7 +23,7 @@ the rules, a completion checklist, and a guardrail so nothing obvious slips thro
 
 **Typography & language**
 - Chinese body text in Songti/SimSun, English/numbers in Times New Roman, level 1–2 headings in Heiti (not bold), level-3 headings in bold Songti.
-- A full font-size hierarchy (cover title 二号 Heiti bold; H1 三号 / H2 四号 Heiti; H3 小四 Songti bold; body 小四 Songti; captions 五号 Songti; headers/footers/footnotes 小五).
+- A full font-size hierarchy — see [the table below](#font-size-hierarchy).
 - Dominant-language punctuation normalization (Chinese vs. English), special marks (`……`, `——`, `《 》`), while protecting URLs, DOIs, code, formulas, decimals, and citation brackets.
 - Body justified, first-line indent 2 字符, 1.5× line spacing.
 
@@ -45,6 +45,26 @@ the rules, a completion checklist, and a guardrail so nothing obvious slips thro
 **Numbers, units, appendix code**
 - Half-width space between number and unit (`20 m³/s`) — except `%`, `°`, `℃`/`°C`, which attach directly (`50%`, `30°`, `25℃`); GB 3100/3101/3102 units, GB/T 15835 numeral usage.
 - Appendix code after the main text with **red comments** (`C00000`).
+
+## Font-size hierarchy
+
+Defaults below; a school/journal template always takes precedence.
+
+| Element | Size | Font / style |
+| --- | --- | --- |
+| Cover title | 二号 (22 pt) | Heiti, bold, centered |
+| Section titles (abstract / TOC / references) | 小二 (18 pt) | Heiti, not bold |
+| Heading 1 (chapter) | 三号 (16 pt) | Heiti, not bold; 0.5-line space before/after |
+| Heading 2 (section) | 四号 (14 pt) | Heiti, not bold |
+| Heading 3 (subsection) | 小四 (12 pt) | Songti, **bold** |
+| Body | 小四 (12 pt) | Songti (CJK) / Times New Roman (Latin & digits) |
+| Abstract / keywords | 小四 (12 pt) | Songti |
+| Figure / table captions | 五号 (10.5 pt) | Songti (CJK) / Times New Roman (Latin), centered |
+| Table content | 五号 (10.5 pt) | Songti, one size below body |
+| Table notes | 小五 (9 pt) | Songti |
+| Reference entries | 五号 (10.5 pt) | Songti, hanging indent |
+| Header / footer | 小五 (9 pt) | Songti |
+| Footnotes | 小五 (9 pt) | Songti |
 
 ## What the result looks like
 
