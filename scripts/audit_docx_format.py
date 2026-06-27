@@ -396,11 +396,14 @@ def audit_captions(root: ET.Element, issues: list[Issue], counts: Optional[dict[
 
 def audit_tables(root: ET.Element, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:
     for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
+        text_sizes: set[str] = set()
         for run in table.findall(".//w:r", NS):
             if not paragraph_text(run).strip():
                 continue
             size = w_attr(run.find("w:rPr/w:sz", NS), "val")
             size_cs = w_attr(run.find("w:rPr/w:szCs", NS), "val")
+            if size:
+                text_sizes.add(size)
             for value in (size, size_cs):
                 # Table text should be 五号 (w:sz=21); 小四 (24) is also accepted. Anything
                 # else (especially larger than the body) is flagged.
@@ -413,6 +416,33 @@ def audit_tables(root: ET.Element, issues: list[Issue], counts: Optional[dict[tu
                         counts,
                     )
                     break
+        # OMML formula symbols carry their own size in m:r/w:rPr/w:sz. An unsized math run
+        # inherits the body default (小四), so inside a 五号 table the symbols render larger
+        # than the surrounding cell text. Plain w:r scanning above never sees these m:r runs.
+        table_is_wuhao = "21" in text_sizes
+        formula_flagged = False
+        for math_run in table.findall(".//m:r", NS):
+            if not "".join(node.text or "" for node in math_run.findall("m:t", NS)).strip():
+                continue
+            math_size = w_attr(math_run.find("w:rPr/w:sz", NS), "val")
+            if math_size not in (None, "21", "24"):
+                add_issue(
+                    issues,
+                    "FAIL",
+                    "TABLE_SIZE",
+                    f"Table {table_index} has a formula symbol at font size {math_size}; expected 五号/10.5 pt (w:sz=21; 小四/24 also accepted).",
+                    counts,
+                )
+            elif table_is_wuhao and math_size != "21" and not formula_flagged:
+                add_issue(
+                    issues,
+                    "WARN",
+                    "TABLE_FORMULA_SIZE",
+                    f"Table {table_index} has OMML/formula symbols larger than its 五号 (10.5 pt) text; "
+                    "set in-table formulas to the table text size (w:sz=21), not the larger body 小四.",
+                    counts,
+                )
+                formula_flagged = True
 
 
 def audit_color(root: ET.Element, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:

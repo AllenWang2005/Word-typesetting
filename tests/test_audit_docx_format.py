@@ -362,6 +362,36 @@ class TableSizeTests(unittest.TestCase):
         self.assertIn("TABLE_SIZE", codes(issues))
 
 
+class TableFormulaSizeTests(unittest.TestCase):
+    M = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+
+    def _table(self, math_sz: Optional[str]) -> ET.Element:
+        rpr = f'<w:rPr><w:sz w:val="{math_sz}"/></w:rPr>' if math_sz else ""
+        return ET.fromstring(
+            f'<w:document xmlns:w="{W}" xmlns:m="{self.M}"><w:body>'
+            f'<w:tbl><w:tr><w:tc><w:p>'
+            f'<w:r><w:rPr><w:sz w:val="21"/></w:rPr><w:t>项目</w:t></w:r>'
+            f"<m:oMath><m:r>{rpr}<m:t>Z</m:t></m:r></m:oMath>"
+            f"</w:p></w:tc></w:tr></w:tbl></w:body></w:document>"
+        )
+
+    def test_unsized_formula_in_wuhao_table_flagged(self):
+        # Math run inherits the body default (小四), larger than the 五号 cell text.
+        issues = []
+        aud.audit_tables(self._table(None), issues)
+        self.assertIn("TABLE_FORMULA_SIZE", codes(issues))
+
+    def test_xiaosi_formula_in_wuhao_table_flagged(self):
+        issues = []
+        aud.audit_tables(self._table("24"), issues)
+        self.assertIn("TABLE_FORMULA_SIZE", codes(issues))
+
+    def test_wuhao_formula_ok(self):
+        issues = []
+        aud.audit_tables(self._table("21"), issues)
+        self.assertNotIn("TABLE_FORMULA_SIZE", codes(issues))
+
+
 class ColorTests(unittest.TestCase):
     def test_hyperlink_color_not_flagged_but_body_color_is(self):
         root = make_doc(

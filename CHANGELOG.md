@@ -3,6 +3,15 @@
 All notable changes to this skill are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and the project uses semantic versioning.
 
+## [Unreleased]
+
+### Added
+- Auditor check `TABLE_FORMULA_SIZE` (WARN): in a 五号 table, OMML/formula symbols whose size is larger than the cell text (their size lives in `m:r/w:rPr/w:sz`, which plain text resizing never touches). `TABLE_SIZE` now also flags math runs with an out-of-range explicit size.
+
+### Changed
+- Standard: in-table formulas/quantity symbols take the table text size (五号), not the body 小四 — stated explicitly because OMML runs carry their own size.
+- Standard: number–unit gap is now a plain half-width space by default; the non-breaking space is optional and carries a caveat (some fonts/viewers render it as a stray `°`-like glyph).
+
 ## [1.2.0] - 2026-06-26
 
 ### Added
