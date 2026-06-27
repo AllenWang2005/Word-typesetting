@@ -396,8 +396,12 @@ def audit_captions(root: ET.Element, issues: list[Issue], counts: Optional[dict[
 
 def audit_tables(root: ET.Element, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:
     for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
-        for run in table.findall(".//w:r", NS):
-            if not paragraph_text(run).strip():
+        # Include OMML math runs (m:r) so in-table formulas/symbols are size-checked too,
+        # not just ordinary w:r text. Formula size is carried on w:rPr/w:sz inside m:r.
+        for run in table.findall(".//w:r", NS) + table.findall(".//m:r", NS):
+            text = "".join(node.text or "" for node in run.findall(".//w:t", NS))
+            text += "".join(node.text or "" for node in run.findall(".//m:t", NS))
+            if not text.strip():
                 continue
             size = w_attr(run.find("w:rPr/w:sz", NS), "val")
             size_cs = w_attr(run.find("w:rPr/w:szCs", NS), "val")

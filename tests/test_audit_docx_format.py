@@ -361,6 +361,24 @@ class TableSizeTests(unittest.TestCase):
         aud.audit_tables(self._table("28"), issues)  # 四号, larger than body
         self.assertIn("TABLE_SIZE", codes(issues))
 
+    def _table_with_formula(self, sz: str) -> ET.Element:
+        math_ns = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+        return ET.fromstring(
+            f'<w:document xmlns:w="{W}" xmlns:m="{math_ns}"><w:body><w:tbl><w:tr><w:tc><w:p>'
+            f'<m:oMath><m:r><w:rPr><w:sz w:val="{sz}"/></w:rPr><m:t>x</m:t></m:r></m:oMath>'
+            f'</w:p></w:tc></w:tr></w:tbl></w:body></w:document>'
+        )
+
+    def test_in_table_formula_oversized_flagged(self):
+        issues = []
+        aud.audit_tables(self._table_with_formula("28"), issues)  # 四号 formula in a table
+        self.assertIn("TABLE_SIZE", codes(issues))
+
+    def test_in_table_formula_wuhao_ok(self):
+        issues = []
+        aud.audit_tables(self._table_with_formula("21"), issues)  # 五号 formula
+        self.assertNotIn("TABLE_SIZE", codes(issues))
+
 
 class ColorTests(unittest.TestCase):
     def test_hyperlink_color_not_flagged_but_body_color_is(self):

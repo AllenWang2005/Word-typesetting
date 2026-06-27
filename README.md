@@ -133,7 +133,7 @@ with a `FAIL/WARN` summary, and notes any per-code truncation. Checks include:
 | `HEADING_PUNCT` | WARN | Heading ends with punctuation |
 | `HEADING_FONT` / `BODY_FONT` | WARN | Heading in Songti / body in Heiti (direct fonts only) |
 | `HEADING_NO_STYLE` | WARN | Heading-looking line that uses no Word heading style |
-| `TABLE_SIZE` | FAIL | Table text not 五号/10.5 pt (小四 ok; never larger than body) |
+| `TABLE_SIZE` | FAIL | Table text or in-table formula not 五号/10.5 pt (小四 ok; never larger than body) |
 | `TABLE_BORDERS` | WARN | Table has vertical/inner borders (not a three-line table) |
 | `CAPTION_POSITION` | WARN | Table caption below table / figure caption above figure |
 | `COLOR` | WARN | Stray non-black font color (hyperlinks/theme colors excluded) |

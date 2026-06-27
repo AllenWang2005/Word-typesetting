@@ -3,6 +3,12 @@
 All notable changes to this skill are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and the project uses semantic versioning.
 
+## [1.2.1] - 2026-06-26
+
+### Changed
+- Standard: formulas, variables, and quantity symbols **inside a table** now follow the table text size (五号), not the body size (小四); formula size follows its context everywhere.
+- Auditor: `TABLE_SIZE` now also inspects OMML math runs (`m:r`), so an in-table formula left at the wrong (larger) size is caught, not just ordinary text.
+
 ## [1.2.0] - 2026-06-26
 
 ### Added
@@ -31,6 +37,7 @@ All notable changes to this skill are documented here. The format is based on
 ### Added
 - Initial release: the written standard (`SKILL.md` + `references/`), the `audit_docx_format.py` guardrail (punctuation, headings, fonts, captions, tables, citations, formulas; `--json` output and a FAIL/WARN summary), the `normalize_docx.py` safe auto-fixer, a non-compliant example, standard-library unit tests, and GitHub Actions CI.
 
+[1.2.1]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.2.1
 [1.2.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.2.0
 [1.1.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.1.0
 [1.0.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.0.0

@@ -43,6 +43,7 @@ Prefer this pipeline for DOCX work:
 2. Store the LaTeX source in the formula registry. Use `$...$` for inline math and `$$...$$` or display blocks for display math.
 3. Convert LaTeX fragments to Word OMML with a reliable converter, preferably Pandoc-generated DOCX, then extract the resulting `<m:oMath>` or `<m:oMathPara>` XML.
 4. Replace placeholders in the target DOCX with the converted OMML XML. Inline symbols use inline `<m:oMath>`; display formulas use a centered equation paragraph and, when needed, a right-aligned equation number.
+5. Set the OMML run font size to match the surrounding context: body formulas at the body size (小四, `w:sz=24`), formulas inside a table at the table size (五号, `w:sz=21`). Do not leave an in-table formula at the body's 小四 — it must match the 五号 table text.
 5. Verify that no placeholder, visible LaTeX source, formula image, or plain-text substitute remains.
 
 When Pandoc is unavailable, use another route that still produces native Word OMML, such as Word's equation conversion or an OMML-capable library. Do not fall back to styled normal text unless the user explicitly accepts a non-compliant visual-only draft.

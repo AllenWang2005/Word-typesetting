@@ -125,7 +125,7 @@ python scripts/audit_docx_format.py path/to/report.docx --json   # 机器可读
 | `HEADING_PUNCT` | WARN | 标题末尾带标点 |
 | `HEADING_FONT` / `BODY_FONT` | WARN | 一二级标题用了宋体 / 正文用了黑体(仅查直接字体) |
 | `HEADING_NO_STYLE` | WARN | 看着像标题但没用 Word 标题样式 |
-| `TABLE_SIZE` | FAIL | 表内文字非五号/10.5 pt(小四亦可;不得大于正文) |
+| `TABLE_SIZE` | FAIL | 表内文字或表内公式非五号/10.5 pt(小四亦可;不得大于正文) |
 | `TABLE_BORDERS` | WARN | 表格有竖线/内部网格(非三线表) |
 | `CAPTION_POSITION` | WARN | 表题在表下 / 图题在图上 |
 | `COLOR` | WARN | 多余的非黑色字体(已排除超链接/主题色) |
