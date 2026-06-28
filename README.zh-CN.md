@@ -175,7 +175,8 @@ python -m unittest discover -s tests -v
 │   ├── document-structure-and-page-setup.md    # 结构、页面设置、目录、字号
 │   ├── latex-omml-formula-workflow.md          # LaTeX → Word OMML 工作流
 │   ├── reference-style-gbt7714.md              # GB/T 7714—2015 参考文献格式
-│   └── citation-crossrefs-ooxml.md             # 正文 REF 交叉引用 OOXML
+│   ├── citation-crossrefs-ooxml.md             # 正文 REF 交叉引用 OOXML
+│   └── three-line-table-ooxml.md               # 三线表 OOXML 实现配方
 ├── scripts/
 │   ├── audit_docx_format.py                    # 只读护栏
 │   └── normalize_docx.py                       # 安全自动修复

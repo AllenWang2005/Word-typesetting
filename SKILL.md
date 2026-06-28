@@ -9,13 +9,14 @@ description: Apply Allen's formal Word report formatting standard. Use when crea
 
 Use this skill to format formal Chinese Word reports consistently with Allen's preferred standard. It complements the general DOCX/document skill: use the document tooling for implementation and rendering, and use this skill for the required typography, formula, table, figure, reference/citation, and appendix-code rules.
 
-**Standard version: 2026-06-26.** Detailed rules live in `references/`:
+**Standard version: 2026-06-28.** Detailed rules live in `references/`:
 
 - `references/formatting-standard.md` — main formatting checklist (typography, language/punctuation, headings, tables, formulas, figures, numbers/units, citations, lists/footnotes, appendix code).
 - `references/document-structure-and-page-setup.md` — document structure and order, page setup, headers/footers, page numbering and sections, TOC, font-size hierarchy, multilevel numbering, widow/orphan control.
 - `references/latex-omml-formula-workflow.md` — LaTeX→OMML formula discovery and conversion.
 - `references/reference-style-gbt7714.md` — GB/T 7714 bibliography entry format.
 - `references/citation-crossrefs-ooxml.md` — in-text superscript citations + Word REF cross-reference OOXML.
+- `references/three-line-table-ooxml.md` — OOXML recipe for the three-line table (which borders to set, line widths, avoiding gridded styles).
 
 ## Required Workflow
 
@@ -38,7 +39,7 @@ Use this skill to format formal Chinese Word reports consistently with Allen's p
 - Body punctuation: match the dominant document language. Chinese prose uses Chinese punctuation; English prose uses ASCII punctuation. Keep citation brackets ASCII `[` and `]`. Use the Chinese ellipsis `……`, em dash `——`, and book-title marks `《 》` where applicable.
 - Body color: keep body text, headings, captions, tables, formulas, abstract, keywords, and references black unless the user explicitly requests otherwise. Appendix code comments are the standard red exception.
 - Abstract and keywords: left aligned with left indent 0 and first-line indent 0.
-- Tables: white three-line tables — no fill, no vertical lines, no full grid; top/bottom rules ~1.5 pt and the header rule ~0.75 pt. Table text — including in-table formulas and symbols — is 五号/10.5 pt (one size below the body; 小四 also accepted, never larger than body) and centered by default; units go in the header. The table caption goes **above** the table, centered. Repeat the header row across page breaks; do not split a table mid-row. Normalize existing tables that do not meet the standard.
+- Tables: white three-line tables — the top and bottom rules visible and **thicker** (~1.5 pt, `w:sz≈12`), a single **thinner** header rule in the middle (~0.75 pt, `w:sz≈6`), and every other border (verticals, inside horizontals) set to none. Do not use a gridded or header-shaded table style; set the borders explicitly (see `references/three-line-table-ooxml.md`). A "no top/bottom rule, thick middle line" result is wrong. Table text — including in-table formulas and symbols — is 五号/10.5 pt (one size below the body; 小四 also accepted, never larger than body) and centered by default; units go in the header. The table caption goes **above** the table, centered. Repeat the header row across page breaks; do not split a table mid-row. Normalize existing tables that do not meet the standard.
 - Figures: the figure caption goes **below** the figure, centered; keep plot titles out of the image when a Word caption is present.
 - Numbering: number figures, tables, and equations by chapter (`图 1-1`, `表 2-3`, `式(1-1)`); refer to them in text as “如图 1-1 所示” / “式(1-1)”. Figures and tables must appear **after** they are first referenced (proximity rule).
 - Formulas and symbols: author every formula, inline variable, math object, and quantity symbol in LaTeX and convert it to native Word OMML, including bare symbols such as `Q`, `N`, `H`, or `V` when they define or denote physical quantities. Variables are italic; digits, operators, units, function names, constants, explanatory text, and explanatory subscripts are upright. Formula font size follows its context — body formulas at the body size (小四), in-table formulas at the table size (五号).

@@ -190,7 +190,8 @@ CI runs `py_compile` plus the test suite on Python 3.9 and 3.12 on every push
 │   ├── document-structure-and-page-setup.md    # structure, page setup, TOC, font sizes
 │   ├── latex-omml-formula-workflow.md          # LaTeX → Word OMML workflow
 │   ├── reference-style-gbt7714.md              # GB/T 7714—2015 bibliography format
-│   └── citation-crossrefs-ooxml.md             # in-text REF cross-reference OOXML
+│   ├── citation-crossrefs-ooxml.md             # in-text REF cross-reference OOXML
+│   └── three-line-table-ooxml.md               # three-line table OOXML recipe
 ├── scripts/
 │   ├── audit_docx_format.py                    # read-only guardrail
 │   └── normalize_docx.py                       # safe auto-fixer

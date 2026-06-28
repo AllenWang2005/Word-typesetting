@@ -3,6 +3,14 @@
 All notable changes to this skill are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and the project uses semantic versioning.
 
+## [1.2.2] - 2026-06-28
+
+### Added
+- `references/three-line-table-ooxml.md`: a concrete OOXML recipe for the three-line table — exactly which borders to set (thick top/bottom `w:sz≈12`, a single thin header rule `w:sz≈6`, all other borders none), `w:sz` widths in eighths of a point, a python-docx note, and how to avoid gridded/header-shaded table styles.
+
+### Changed
+- Strengthened the three-line table rule in `SKILL.md` and `formatting-standard.md`: the top and bottom rules must be visible and thicker, the single middle (header) rule thinner; explicitly forbid gridded/header-shaded table styles. Fixes the common "no top/bottom rule, thick middle line" failure. Standard version → 2026-06-28.
+
 ## [1.2.1] - 2026-06-26
 
 ### Changed
@@ -37,6 +45,7 @@ All notable changes to this skill are documented here. The format is based on
 ### Added
 - Initial release: the written standard (`SKILL.md` + `references/`), the `audit_docx_format.py` guardrail (punctuation, headings, fonts, captions, tables, citations, formulas; `--json` output and a FAIL/WARN summary), the `normalize_docx.py` safe auto-fixer, a non-compliant example, standard-library unit tests, and GitHub Actions CI.
 
+[1.2.2]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.2.2
 [1.2.1]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.2.1
 [1.2.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.2.0
 [1.1.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.1.0
