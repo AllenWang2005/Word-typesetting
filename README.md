@@ -142,6 +142,8 @@ with a `FAIL/WARN` summary, and notes any per-code truncation. Checks include:
 | `CITATION_NO_BRACKETS` | WARN | Bare superscript number citation missing its brackets |
 | `VISIBLE_LATEX` | FAIL | Visible LaTeX source instead of OMML |
 | `FORMULA_TEXT` | FAIL/WARN | Plain-text formula / quantity symbol that should be OMML |
+| `FORMULA_DIGIT_ITALIC` | WARN | A number/operator in a formula is italic (only variables should be italic) |
+| `EQUATION_NUMBER_CENTER` | WARN | A numbered display formula is centered (the number should be right-aligned) |
 
 It is intentionally **domain-neutral** — no hard-coded field-specific symbol list.
 

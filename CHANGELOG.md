@@ -3,6 +3,16 @@
 All notable changes to this skill are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and the project uses semantic versioning.
 
+## [1.3.0] - 2026-06-29
+
+### Added
+- Auditor checks: `FORMULA_DIGIT_ITALIC` (a number/operator italicized inside a formula — usually from blanket-italicizing the whole equation) and `EQUATION_NUMBER_CENTER` (a numbered display formula centered instead of having a right-aligned number).
+
+### Changed
+- Formula rules: do not blanket-italicize equations (digits/operators/parentheses stay upright); multi-letter coefficients use one variable + upright subscript (`C_I`, not `CI`); display equations use a left-aligned paragraph with a center tab (equation) and a right tab (number), not a centered line. Workflow doc gained an "Italic vs. upright" section.
+- Appendix code: English/numbers in Times New Roman 小四 (12 pt), Chinese in Songti 小四 (was vaguely "monospace or Times New Roman"); added an appendix-code row to the font-size table.
+- Standard version → 2026-06-29.
+
 ## [1.2.2] - 2026-06-28
 
 ### Added
@@ -45,6 +55,7 @@ All notable changes to this skill are documented here. The format is based on
 ### Added
 - Initial release: the written standard (`SKILL.md` + `references/`), the `audit_docx_format.py` guardrail (punctuation, headings, fonts, captions, tables, citations, formulas; `--json` output and a FAIL/WARN summary), the `normalize_docx.py` safe auto-fixer, a non-compliant example, standard-library unit tests, and GitHub Actions CI.
 
+[1.3.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.3.0
 [1.2.2]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.2.2
 [1.2.1]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.2.1
 [1.2.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.2.0

@@ -53,6 +53,10 @@ LOOKS_LIKE_HEADING_RE = re.compile(
 )
 # Vertical / inner-vertical border tags: a three-line table must not have these.
 VERTICAL_BORDER_TAGS = ("left", "right", "insideV", "start", "end")
+# Inside OMML, only variable letters should be italic; digits/operators/parentheses are upright.
+FORMULA_NONLETTER_RE = re.compile(r"^[\s\d.,，;:；：()（）\[\]{}+\-*/=<>≤≥≈×·∙]+$")
+# A display-equation number such as (3-3) or (式 3-3).
+EQUATION_NUMBER_RE = re.compile(r"[(（]\s*(?:式\s*)?\d+\s*[-–—]\s*\d+\s*[)）]")
 CN_BIB_HEADING_RE = re.compile(r"^(?:第?[一二三四五六七八九十0-9]+(?:章|节)?[、.．]?)?(参考文献|参考资料)$")
 EN_BIB_HEADING_RE = re.compile(r"^(?:\d+[.)]?)?references$", re.I)
 VISIBLE_LATEX_RE = re.compile(r"\\(?:frac|sqrt|sum|prod|int|begin|mathrm|text|sin|exp|lg|max)|[_^]\{")
@@ -152,6 +156,13 @@ def paragraph_style(paragraph: ET.Element) -> str:
 
 def run_is_superscript(run: ET.Element) -> bool:
     return w_attr(run.find("w:rPr/w:vertAlign", NS), "val") == "superscript"
+
+
+def run_is_italic(run: ET.Element) -> bool:
+    italic = run.find("w:rPr/w:i", NS)
+    if italic is not None and (w_attr(italic, "val") or "true").lower() not in ("false", "0", "off"):
+        return True
+    return w_attr(run.find("m:rPr/m:sty", NS), "val") in ("i", "bi")
 
 
 def is_heading_style(style_id: str) -> bool:
@@ -596,6 +607,50 @@ def audit_formulas(
             )
 
 
+def audit_formula_digit_italics(root: ET.Element, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:
+    """Warn when a number/operator inside a formula is italic (only variables should be italic).
+
+    Usually caused by blanket-italicizing the whole equation, which also slants digits.
+    """
+    for math in root.findall(".//m:oMath", NS):
+        for run in math.findall(".//m:r", NS):
+            text = "".join(node.text or "" for node in run.findall(".//m:t", NS))
+            if not text.strip() or any(ch.isalpha() for ch in text):
+                continue
+            if FORMULA_NONLETTER_RE.match(text) and run_is_italic(run):
+                add_issue(
+                    issues,
+                    "WARN",
+                    "FORMULA_DIGIT_ITALIC",
+                    f"A number/operator in a formula is italic ('{text.strip()[:20]}'); digits and operators must be upright, only variables italic.",
+                    counts,
+                )
+                break
+
+
+def audit_equation_numbers(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """Warn when a numbered display formula is centered (the number should be right-aligned)."""
+    for index, paragraph in enumerate(paragraphs, start=1):
+        if paragraph.find(".//m:oMath", NS) is None and paragraph.find(".//m:oMathPara", NS) is None:
+            continue
+        text = paragraph_text(paragraph)
+        if EQUATION_NUMBER_RE.search(text) and paragraph_alignment(paragraph) == "center":
+            add_issue(
+                issues,
+                "WARN",
+                "EQUATION_NUMBER_CENTER",
+                "Paragraph {0} centers a numbered formula; the number should be right-aligned "
+                "(left-aligned paragraph with a center tab for the equation and a right tab for the number): {1}".format(
+                    index, text.strip()[:50]
+                ),
+                counts,
+            )
+
+
 def load_document_xml(docx_path: Path) -> str:
     try:
         with zipfile.ZipFile(docx_path) as archive:
@@ -686,6 +741,8 @@ def main() -> int:
     audit_citations(document_xml, body_text, issues, issue_counts)
     audit_bare_citations(paragraphs[:bib_index], issues, issue_counts)
     audit_formulas(paragraphs[:bib_index], issues, issue_counts)
+    audit_formula_digit_italics(root, issues, issue_counts)
+    audit_equation_numbers(paragraphs[:bib_index], issues, issue_counts)
 
     omml_count = len(root.findall(".//m:oMath", NS)) + len(root.findall(".//m:oMathPara", NS))
     summary, omitted = summarize_issues(issues, issue_counts)

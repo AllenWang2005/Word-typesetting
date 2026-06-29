@@ -9,7 +9,7 @@ description: Apply Allen's formal Word report formatting standard. Use when crea
 
 Use this skill to format formal Chinese Word reports consistently with Allen's preferred standard. It complements the general DOCX/document skill: use the document tooling for implementation and rendering, and use this skill for the required typography, formula, table, figure, reference/citation, and appendix-code rules.
 
-**Standard version: 2026-06-28.** Detailed rules live in `references/`:
+**Standard version: 2026-06-29.** Detailed rules live in `references/`:
 
 - `references/formatting-standard.md` — main formatting checklist (typography, language/punctuation, headings, tables, formulas, figures, numbers/units, citations, lists/footnotes, appendix code).
 - `references/document-structure-and-page-setup.md` — document structure and order, page setup, headers/footers, page numbering and sections, TOC, font-size hierarchy, multilevel numbering, widow/orphan control.
@@ -42,10 +42,10 @@ Use this skill to format formal Chinese Word reports consistently with Allen's p
 - Tables: white three-line tables — the top and bottom rules visible and **thicker** (~1.5 pt, `w:sz≈12`), a single **thinner** header rule in the middle (~0.75 pt, `w:sz≈6`), and every other border (verticals, inside horizontals) set to none. Do not use a gridded or header-shaded table style; set the borders explicitly (see `references/three-line-table-ooxml.md`). A "no top/bottom rule, thick middle line" result is wrong. Table text — including in-table formulas and symbols — is 五号/10.5 pt (one size below the body; 小四 also accepted, never larger than body) and centered by default; units go in the header. The table caption goes **above** the table, centered. Repeat the header row across page breaks; do not split a table mid-row. Normalize existing tables that do not meet the standard.
 - Figures: the figure caption goes **below** the figure, centered; keep plot titles out of the image when a Word caption is present.
 - Numbering: number figures, tables, and equations by chapter (`图 1-1`, `表 2-3`, `式(1-1)`); refer to them in text as “如图 1-1 所示” / “式(1-1)”. Figures and tables must appear **after** they are first referenced (proximity rule).
-- Formulas and symbols: author every formula, inline variable, math object, and quantity symbol in LaTeX and convert it to native Word OMML, including bare symbols such as `Q`, `N`, `H`, or `V` when they define or denote physical quantities. Variables are italic; digits, operators, units, function names, constants, explanatory text, and explanatory subscripts are upright. Formula font size follows its context — body formulas at the body size (小四), in-table formulas at the table size (五号).
+- Formulas and symbols: author every formula, inline variable, math object, and quantity symbol in LaTeX and convert it to native Word OMML, including bare symbols such as `Q`, `N`, `H`, or `V` when they define or denote physical quantities. Variables are italic; digits, operators, units, function names, constants, explanatory text, and explanatory subscripts are upright — do **not** blanket-italicize the whole equation (that slants the digits too). Multi-letter coefficients use one variable + upright subscript (`C_I`, not `CI`). Put a display equation on a left-aligned paragraph with a center tab (equation) and a right tab (number) so the number is right-aligned; do not center the whole line. Formula font size follows its context — body formulas at the body size (小四), in-table formulas at the table size (五号).
 - Numbers and units: put a half-width space between a number and its unit (`20 m³/s`), except `%`, `°`, and `℃`/`°C`, which attach directly (`50%`, `30°`, `25℃`); follow GB 3100/3101/3102 for units and GB/T 15835 for Arabic-vs-Chinese numeral usage.
 - Citations: make body references superscript and field-backed, not merely static superscript text. Reference the whole bracketed `[1]` as one cross-reference unit (brackets included), not a bare number. Use ASCII square brackets `[` and `]`, not Chinese/full-width brackets. Format bibliography entries per GB/T 7714—2015.
-- Appendix code: put code after main text and tables; color code comments red, preferably `C00000`.
+- Appendix code: put code after main text and tables; English/numbers in Times New Roman 小四 (12 pt), Chinese in Songti 小四; color code comments red, preferably `C00000`.
 
 ## Enforcement Protocol
 
@@ -66,6 +66,7 @@ Fail the formatting pass and revise if any of these remain:
 - Table text is larger than the body or not the expected 五号/10.5 pt (小四/12 pt also accepted), unless the user or official template explicitly requires a different size.
 - Formulas, inline variables, quantity symbols, subscripts/superscripts, or math objects remain as ordinary styled text instead of LaTeX-rendered Word OMML, including bare one-letter quantity symbols in `式中` / `其中` / `表示` / `为` definition contexts.
 - A document with formulas/symbols was edited without a formula discovery pass and a LaTeX source list/registry.
+- A formula is blanket-italicized (digits/operators slanted), or a numbered display equation is centered instead of having a right-aligned number, or appendix code is not Times New Roman 小四.
 - Existing tables, formulas, variables, units, or symbols still violate the standard.
 - Body citations are only static superscript text instead of Word `REF` fields/bookmark cross-references, or a citation references only the bare number instead of the whole bracketed `[1]`, unless the user explicitly allows visual-only citations; or bibliography entries do not follow GB/T 7714—2015.
 - The available DOCX audit script reports `FAIL` items that have not been fixed or explicitly explained.

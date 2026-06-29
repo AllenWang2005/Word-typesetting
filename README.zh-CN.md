@@ -134,6 +134,8 @@ python scripts/audit_docx_format.py path/to/report.docx --json   # 机器可读
 | `CITATION_NO_BRACKETS` | WARN | 裸上标数字引用、丢了中括号 |
 | `VISIBLE_LATEX` | FAIL | 残留可见 LaTeX 源码而非 OMML |
 | `FORMULA_TEXT` | FAIL/WARN | 本应是 OMML 的纯文本公式/量符号 |
+| `FORMULA_DIGIT_ITALIC` | WARN | 公式里的数字/运算符被斜体(只有变量该斜体) |
+| `EQUATION_NUMBER_CENTER` | WARN | 带编号的独立公式整体居中(编号应靠右) |
 
 它刻意保持**领域中立**——不写死任何学科专有符号表。
 

@@ -50,9 +50,16 @@ When Pandoc is unavailable, use another route that still produces native Word OM
 
 ## Display Formula Layout
 
-- Display formulas are centered as equations. Formula numbers are right aligned, usually `（式x-x）` or the project's existing numbering style.
+- The equation is centered and its number is right-aligned, but do **not** set the paragraph alignment to centered — that centers the number too. Use a left-aligned paragraph with two tab stops: a **center tab** at the column midpoint (equation) and a **right tab** at the right margin (number). Insert `<tab>` + equation + `<tab>` + `(3-3)`. A borderless 1×3 table (empty / equation centered / number right-aligned) is an acceptable alternative.
+- Number formulas by chapter in parentheses, e.g. `(3-1)`, `(3-2)`; reference them in text as "由式 (3-1) 可得".
 - Multi-line formulas should be aligned in LaTeX before conversion, typically with `aligned`.
 - Keep explanatory text such as `式中：` outside the equation when possible, with the following quantity symbols rendered as inline OMML.
+
+## Italic vs. upright (do not blanket-italicize)
+
+- Only variable letters are italic. Digits, operators, parentheses, commas, units, and function names are upright. In OMML this is the default — do **not** add `<w:i/>` to the whole equation, which forces the digits italic too (the most common failure).
+- Multi-letter coefficients are not one italic variable: use one variable plus an upright subscript, e.g. recession coefficients `C_I` / `C_G` / `C_S` (italic `C`, upright `I`/`G`/`S`), never adjacent italic letters `CI` / `CG` (reads as `C × I`).
+- The auditor flags `FORMULA_DIGIT_ITALIC` (an italic number/operator) and `EQUATION_NUMBER_CENTER` (a centered numbered equation).
 
 ## Verification
 

@@ -430,6 +430,50 @@ class JsonOutputTests(unittest.TestCase):
         self.assertEqual(return_code, 0)
 
 
+class FormulaItalicTests(unittest.TestCase):
+    def _math(self, run_xml: str) -> ET.Element:
+        math_ns = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+        return ET.fromstring(
+            f'<w:document xmlns:w="{W}" xmlns:m="{math_ns}"><w:body><w:p>'
+            f'<m:oMath>{run_xml}</m:oMath></w:p></w:body></w:document>'
+        )
+
+    def test_italic_digit_flagged(self):
+        issues = []
+        aud.audit_formula_digit_italics(self._math('<m:r><w:rPr><w:i/></w:rPr><m:t>1</m:t></m:r>'), issues)
+        self.assertIn("FORMULA_DIGIT_ITALIC", codes(issues))
+
+    def test_upright_digit_ok(self):
+        issues = []
+        aud.audit_formula_digit_italics(self._math('<m:r><m:t>1</m:t></m:r>'), issues)
+        self.assertNotIn("FORMULA_DIGIT_ITALIC", codes(issues))
+
+    def test_italic_variable_letter_ok(self):
+        issues = []
+        aud.audit_formula_digit_italics(self._math('<m:r><w:rPr><w:i/></w:rPr><m:t>x</m:t></m:r>'), issues)
+        self.assertNotIn("FORMULA_DIGIT_ITALIC", codes(issues))
+
+
+class EquationNumberTests(unittest.TestCase):
+    def _eq(self, jc: Optional[str]) -> ET.Element:
+        math_ns = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+        jc_xml = f'<w:jc w:val="{jc}"/>' if jc else ""
+        return ET.fromstring(
+            f'<w:p xmlns:w="{W}" xmlns:m="{math_ns}"><w:pPr>{jc_xml}</w:pPr>'
+            f'<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath><w:r><w:t>(式 3-3)</w:t></w:r></w:p>'
+        )
+
+    def test_centered_numbered_formula_flagged(self):
+        issues = []
+        aud.audit_equation_numbers([self._eq("center")], issues)
+        self.assertIn("EQUATION_NUMBER_CENTER", codes(issues))
+
+    def test_left_numbered_formula_ok(self):
+        issues = []
+        aud.audit_equation_numbers([self._eq("left")], issues)
+        self.assertNotIn("EQUATION_NUMBER_CENTER", codes(issues))
+
+
 class SummaryTests(unittest.TestCase):
     def test_omitted_issue_count_reported(self):
         issues = []
