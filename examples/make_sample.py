@@ -19,6 +19,7 @@ has something to report:
   * non-black body font color
   * a heading in Songti that ends with punctuation
   * a table caption placed below its table
+  * a shaded (non-white) table header cell
 """
 
 from __future__ import annotations
@@ -27,8 +28,40 @@ import sys
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor
+
+
+def _set_border(parent, tag: str, val: str, sz: str = "") -> None:
+    element = OxmlElement(f"w:{tag}")
+    element.set(qn("w:val"), val)
+    if sz:
+        element.set(qn("w:sz"), sz)
+        element.set(qn("w:space"), "0")
+        element.set(qn("w:color"), "000000")
+    parent.append(element)
+
+
+def make_three_line(table) -> None:
+    """Give a python-docx table explicit three-line borders and a white background."""
+    tbl_pr = table._tbl.tblPr
+    borders = OxmlElement("w:tblBorders")
+    _set_border(borders, "top", "single", "12")
+    _set_border(borders, "bottom", "single", "12")
+    for tag in ("left", "right", "insideH", "insideV"):
+        _set_border(borders, tag, "none")
+    tbl_pr.append(borders)
+    for cell in table.rows[0].cells:
+        tc_pr = cell._tc.get_or_add_tcPr()
+        cell_borders = OxmlElement("w:tcBorders")
+        _set_border(cell_borders, "bottom", "single", "6")
+        tc_pr.append(cell_borders)
+        shd = OxmlElement("w:shd")
+        shd.set(qn("w:val"), "clear")
+        shd.set(qn("w:color"), "auto")
+        shd.set(qn("w:fill"), "auto")
+        tc_pr.append(shd)
 
 
 def build(path: str) -> None:
@@ -71,12 +104,17 @@ def build(path: str) -> None:
     run.font.name = "宋体"
     run._element.get_or_add_rPr().get_or_add_rFonts().set(qn("w:eastAsia"), "宋体")
 
-    # A table whose text is not small-four (12 pt).
+    # A table whose text is not small-four (12 pt), with a shaded header cell
+    # (a three-line table must be all white).
     table = doc.add_table(rows=1, cols=2)
     for idx, label in enumerate(("方案", "流量")):
         cell = table.cell(0, idx)
         run = cell.paragraphs[0].add_run(label)
         run.font.size = Pt(14)  # -> w:sz=28, not the required 24
+    shd = OxmlElement("w:shd")
+    shd.set(qn("w:val"), "clear")
+    shd.set(qn("w:fill"), "D9E2F3")  # light blue header shading
+    table.cell(0, 0)._tc.get_or_add_tcPr().append(shd)
 
     # A table caption placed BELOW the table (table captions belong above).
     doc.add_paragraph("表 1-1 方案比较结果")
@@ -114,12 +152,13 @@ def build_compliant(path: str) -> None:
     cap = doc.add_paragraph("表 1-1 主要计算参数")
     cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    # Default table (no borders) with 五号 (10.5 pt) text.
+    # A proper white three-line table with 五号 (10.5 pt) text.
     table = doc.add_table(rows=2, cols=2)
     for row in table.rows:
         for cell in row.cells:
             run = cell.paragraphs[0].add_run("参数")
             run.font.size = Pt(10.5)  # 五号 -> w:sz=21
+    make_three_line(table)
 
     doc.save(path)
     print(f"wrote {path}")

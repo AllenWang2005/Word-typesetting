@@ -304,6 +304,135 @@ class TableBordersTests(unittest.TestCase):
         self.assertNotIn("TABLE_BORDERS", codes(issues))
 
 
+class TableShadingTests(unittest.TestCase):
+    def _table(self, shd: str = "", tbl_style: str = "") -> ET.Element:
+        style_ref = f'<w:tblPr><w:tblStyle w:val="{tbl_style}"/></w:tblPr>' if tbl_style else ""
+        tcpr = f"<w:tcPr>{shd}</w:tcPr>" if shd else ""
+        return make_doc(
+            f'<w:tbl>{style_ref}<w:tr><w:tc>{tcpr}<w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+        )
+
+    def test_shaded_header_cell_flagged(self):
+        issues = []
+        aud.audit_table_shading(self._table('<w:shd w:val="clear" w:fill="D9E2F3"/>'), issues)
+        self.assertIn("TABLE_SHADING", codes(issues))
+
+    def test_clear_auto_shading_ok(self):
+        issues = []
+        aud.audit_table_shading(self._table('<w:shd w:val="clear" w:color="auto" w:fill="auto"/>'), issues)
+        self.assertNotIn("TABLE_SHADING", codes(issues))
+
+    def test_white_fill_ok(self):
+        issues = []
+        aud.audit_table_shading(self._table('<w:shd w:val="clear" w:fill="FFFFFF"/>'), issues)
+        self.assertNotIn("TABLE_SHADING", codes(issues))
+
+    def test_pattern_shading_flagged(self):
+        issues = []
+        aud.audit_table_shading(self._table('<w:shd w:val="pct10" w:fill="auto"/>'), issues)
+        self.assertIn("TABLE_SHADING", codes(issues))
+
+    def test_style_driven_first_row_shading_flagged(self):
+        # The header shading lives in the table style's firstRow conditional format
+        # (styles.xml), not in document.xml — the classic "blue header" failure.
+        styles = ET.fromstring(
+            f'<w:styles xmlns:w="{W}">'
+            f'<w:style w:type="table" w:styleId="GridTable4-Accent1">'
+            f'<w:tblStylePr w:type="firstRow"><w:tcPr>'
+            f'<w:shd w:val="clear" w:fill="D9E2F3"/></w:tcPr></w:tblStylePr>'
+            f'</w:style></w:styles>'
+        )
+        issues = []
+        aud.audit_table_shading(self._table(tbl_style="GridTable4-Accent1"), issues, styles_root=styles)
+        self.assertIn("TABLE_SHADING", codes(issues))
+
+    def test_plain_style_reference_ok(self):
+        styles = ET.fromstring(
+            f'<w:styles xmlns:w="{W}">'
+            f'<w:style w:type="table" w:styleId="TableNormal"/></w:styles>'
+        )
+        issues = []
+        aud.audit_table_shading(self._table(tbl_style="TableNormal"), issues, styles_root=styles)
+        self.assertNotIn("TABLE_SHADING", codes(issues))
+
+
+class TableRulesTests(unittest.TestCase):
+    def _three_line(self, top_sz: str = "12", header_sz: str = "6", top: bool = True) -> ET.Element:
+        top_xml = f'<w:top w:val="single" w:sz="{top_sz}"/>' if top else ""
+        return make_doc(
+            f'<w:tbl><w:tblPr><w:tblBorders>{top_xml}'
+            f'<w:bottom w:val="single" w:sz="{top_sz}"/>'
+            f'<w:insideH w:val="none"/><w:insideV w:val="none"/>'
+            f'</w:tblBorders></w:tblPr>'
+            f'<w:tr><w:tc><w:tcPr><w:tcBorders>'
+            f'<w:bottom w:val="single" w:sz="{header_sz}"/></w:tcBorders></w:tcPr>'
+            f'<w:p><w:r><w:t>h</w:t></w:r></w:p></w:tc></w:tr>'
+            f'<w:tr><w:tc><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+        )
+
+    def test_proper_three_line_table_ok(self):
+        issues = []
+        aud.audit_table_rules(self._three_line(), issues)
+        self.assertNotIn("TABLE_RULES", codes(issues))
+
+    def test_borderless_table_flagged(self):
+        issues = []
+        aud.audit_table_rules(make_doc(TABLE_XML), issues)
+        self.assertIn("TABLE_RULES", codes(issues))
+
+    def test_missing_top_rule_flagged(self):
+        issues = []
+        aud.audit_table_rules(self._three_line(top=False), issues)
+        self.assertIn("TABLE_RULES", codes(issues))
+
+    def test_thick_middle_line_flagged(self):
+        # The "no thin header rule, thick middle line" failure: header rule >= top rule.
+        issues = []
+        aud.audit_table_rules(self._three_line(top_sz="6", header_sz="12"), issues)
+        self.assertIn("TABLE_RULES", codes(issues))
+
+    def test_visible_inside_h_flagged(self):
+        root = make_doc(
+            '<w:tbl><w:tblPr><w:tblBorders>'
+            '<w:top w:val="single" w:sz="12"/><w:bottom w:val="single" w:sz="12"/>'
+            '<w:insideH w:val="single" w:sz="4"/>'
+            '</w:tblBorders></w:tblPr>'
+            '<w:tr><w:tc><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+        )
+        issues = []
+        aud.audit_table_rules(root, issues)
+        self.assertIn("TABLE_RULES", codes(issues))
+
+
+class MathDuplicationTests(unittest.TestCase):
+    MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+
+    def _p(self, plain: str, math: str) -> ET.Element:
+        return ET.fromstring(
+            f'<w:p xmlns:w="{W}" xmlns:m="{self.MATH_NS}">'
+            f'<w:r><w:t xml:space="preserve">{plain}</w:t></w:r>'
+            f'<m:oMath><m:r><m:t>{math}</m:t></m:r></m:oMath></w:p>'
+        )
+
+    def test_appended_math_duplicating_prose_flagged(self):
+        # Append-instead-of-replace: the prose still says F=44.5 and the same
+        # expression was appended as OMML at the paragraph end.
+        issues = []
+        aud.audit_math_duplication([self._p("控制面积F=44.5平方公里。", "F=44.5")], issues)
+        self.assertIn("MATH_DUPLICATE", codes(issues))
+
+    def test_in_place_math_ok(self):
+        issues = []
+        aud.audit_math_duplication([self._p("控制面积为下式所示。", "F=44.5")], issues)
+        self.assertNotIn("MATH_DUPLICATE", codes(issues))
+
+    def test_short_shared_symbol_not_flagged(self):
+        # A lone symbol like "Q" may legitimately appear in both prose and math.
+        issues = []
+        aud.audit_math_duplication([self._p("其中Q代表流量。", "Q")], issues)
+        self.assertNotIn("MATH_DUPLICATE", codes(issues))
+
+
 class TableCellExclusionTests(unittest.TestCase):
     def test_numeric_table_cell_not_flagged_as_heading(self):
         body = (

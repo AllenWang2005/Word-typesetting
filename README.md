@@ -135,6 +135,8 @@ with a `FAIL/WARN` summary, and notes any per-code truncation. Checks include:
 | `HEADING_NO_STYLE` | WARN | Heading-looking line that uses no Word heading style |
 | `TABLE_SIZE` | FAIL | Table text or in-table formula not 五号/10.5 pt (小四 ok; never larger than body) |
 | `TABLE_BORDERS` | WARN | Table has vertical/inner borders (not a three-line table) |
+| `TABLE_SHADING` | FAIL | Table/cell shading, direct or from the table style's `firstRow` format (three-line tables are white) |
+| `TABLE_RULES` | WARN | Missing/wrong three-line rules: no visible top/bottom rules, row-to-row insideH, or header rule not thinner |
 | `CAPTION_POSITION` | WARN | Table caption below table / figure caption above figure |
 | `COLOR` | WARN | Stray non-black font color (hyperlinks/theme colors excluded) |
 | `CITATION_BRACKETS` | FAIL | Full-width citation brackets `［1］` |
@@ -142,12 +144,13 @@ with a `FAIL/WARN` summary, and notes any per-code truncation. Checks include:
 | `CITATION_NO_BRACKETS` | WARN | Bare superscript number citation missing its brackets |
 | `VISIBLE_LATEX` | FAIL | Visible LaTeX source instead of OMML |
 | `FORMULA_TEXT` | FAIL/WARN | Plain-text formula / quantity symbol that should be OMML |
+| `MATH_DUPLICATE` | FAIL | Rendered OMML whose text still exists as plain text in the same paragraph (append-instead-of-replace) |
 | `FORMULA_DIGIT_ITALIC` | WARN | A number/operator in a formula is italic (only variables should be italic) |
 | `EQUATION_NUMBER_CENTER` | WARN | A numbered display formula is centered (the number should be right-aligned) |
 
 It is intentionally **domain-neutral** — no hard-coded field-specific symbol list.
 
-**Audit scope:** the script inspects the main document story in `word/document.xml`.
+**Audit scope:** the script inspects the main document story in `word/document.xml`, plus `word/styles.xml` for table-style shading and borders.
 It does not audit headers, footers, footnotes, endnotes, comments, or embedded parts —
 verify those visually or with a deeper OOXML pass when they matter. Table-cell text is
 checked for font size and borders only, not punctuation/heading/formula (this avoids

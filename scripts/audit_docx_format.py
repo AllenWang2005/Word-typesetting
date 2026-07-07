@@ -19,9 +19,10 @@ M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 W = f"{{{W_NS}}}"
 NS = {"w": W_NS, "m": M_NS}
 AUDIT_SCOPE = (
-    "Main document story only: word/document.xml. Headers, footers, footnotes, "
-    "endnotes, comments, and separate embedded parts are not audited by this script. "
-    "Table-cell text is checked for font size and borders only, not punctuation/heading/formula."
+    "Main document story only: word/document.xml (plus word/styles.xml for table "
+    "style shading/borders). Headers, footers, footnotes, endnotes, comments, and "
+    "separate embedded parts are not audited by this script. Table-cell text is "
+    "checked for font size, borders, and shading only, not punctuation/heading/formula."
 )
 
 CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
@@ -479,6 +480,179 @@ def border_is_visible(border: Optional[ET.Element]) -> bool:
     return (w_attr(border, "val") or "").lower() not in ("", "none", "nil")
 
 
+def border_size(border: Optional[ET.Element]) -> Optional[int]:
+    value = w_attr(border, "sz")
+    try:
+        return int(value) if value is not None else None
+    except ValueError:
+        return None
+
+
+def shading_is_visible(shd: Optional[ET.Element]) -> bool:
+    """True when a w:shd element actually paints a non-white background."""
+    if shd is None:
+        return False
+    val = (w_attr(shd, "val") or "clear").lower()
+    fill = (w_attr(shd, "fill") or "auto").upper()
+    if val not in ("clear", "nil", "none"):
+        return True
+    return fill not in ("AUTO", "FFFFFF")
+
+
+def build_style_map(styles_root: Optional[ET.Element]) -> dict[str, ET.Element]:
+    if styles_root is None:
+        return {}
+    styles = {}
+    for style in styles_root.findall("w:style", NS):
+        style_id = style.get(f"{W}styleId")
+        if style_id:
+            styles[style_id] = style
+    return styles
+
+
+def style_chain(style_id: str, style_map: dict[str, ET.Element]) -> list[ET.Element]:
+    """Return the style and its basedOn ancestors (cycle-safe, depth-limited)."""
+    chain: list[ET.Element] = []
+    seen: set[str] = set()
+    current: Optional[str] = style_id
+    while current and current not in seen and len(chain) < 8:
+        seen.add(current)
+        style = style_map.get(current)
+        if style is None:
+            break
+        chain.append(style)
+        current = w_attr(style.find("w:basedOn", NS), "val")
+    return chain
+
+
+def table_style_id(table: ET.Element) -> Optional[str]:
+    return w_attr(table.find("w:tblPr/w:tblStyle", NS), "val")
+
+
+def audit_table_shading(
+    root: ET.Element,
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+    styles_root: Optional[ET.Element] = None,
+) -> None:
+    """A three-line table must be white: no cell/table shading, direct or style-driven.
+
+    Header shading usually comes from the table style's firstRow conditional format
+    (in styles.xml), which is invisible in word/document.xml — so the referenced
+    table style's chain is inspected too when styles.xml is available.
+    """
+    style_map = build_style_map(styles_root)
+    for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
+        if any(shading_is_visible(shd) for shd in table.findall(".//w:shd", NS)):
+            add_issue(
+                issues,
+                "FAIL",
+                "TABLE_SHADING",
+                f"Table {table_index} has cell/table shading; a three-line table must be all white "
+                "(clear every w:shd to val=clear fill=auto).",
+                counts,
+            )
+            continue
+        style_id = table_style_id(table)
+        if not style_id:
+            continue
+        for style in style_chain(style_id, style_map):
+            if any(shading_is_visible(shd) for shd in style.findall(".//w:shd", NS)):
+                add_issue(
+                    issues,
+                    "FAIL",
+                    "TABLE_SHADING",
+                    f"Table {table_index} references table style '{style_id}' whose definition adds shading "
+                    "(often firstRow header shading); remove the style reference, zero the w:tblLook flags, "
+                    "and set explicit borders instead.",
+                    counts,
+                )
+                break
+
+
+def resolve_table_borders(
+    table: ET.Element, style_map: dict[str, ET.Element]
+) -> Optional[ET.Element]:
+    borders = table.find("w:tblPr/w:tblBorders", NS)
+    if borders is not None:
+        return borders
+    style_id = table_style_id(table)
+    if style_id:
+        for style in style_chain(style_id, style_map):
+            borders = style.find("w:tblPr/w:tblBorders", NS)
+            if borders is not None:
+                return borders
+    return None
+
+
+def audit_table_rules(
+    root: ET.Element,
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+    styles_root: Optional[ET.Element] = None,
+) -> None:
+    """Check the three horizontal rules: visible thick top/bottom, thinner header rule.
+
+    Catches the classic "no top/bottom rule, thick middle line" failure and tables
+    that were left borderless instead of getting explicit three-line borders.
+    """
+    style_map = build_style_map(styles_root)
+    for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
+        borders = resolve_table_borders(table, style_map)
+        if borders is None:
+            add_issue(
+                issues,
+                "WARN",
+                "TABLE_RULES",
+                f"Table {table_index} has no explicit table borders; a three-line table needs visible thick "
+                "top/bottom rules (w:sz≈12) and a thin header rule (w:sz≈6) set explicitly.",
+                counts,
+            )
+            continue
+        top = borders.find("w:top", NS)
+        bottom = borders.find("w:bottom", NS)
+        if not border_is_visible(top) or not border_is_visible(bottom):
+            add_issue(
+                issues,
+                "WARN",
+                "TABLE_RULES",
+                f"Table {table_index} is missing a visible top or bottom rule; both must exist and be the "
+                "thick rules (w:sz≈12) of the three-line table.",
+                counts,
+            )
+        if border_is_visible(borders.find("w:insideH", NS)):
+            add_issue(
+                issues,
+                "WARN",
+                "TABLE_RULES",
+                f"Table {table_index} has row-to-row horizontal borders (insideH); only the header rule may "
+                "sit between the top and bottom rules.",
+                counts,
+            )
+        top_size = border_size(top)
+        if top_size is None:
+            continue
+        rows = table.findall("w:tr", NS)
+        if not rows:
+            continue
+        header_sizes = []
+        for cell_borders in rows[0].findall("w:tc/w:tcPr/w:tcBorders", NS):
+            bottom_rule = cell_borders.find("w:bottom", NS)
+            if border_is_visible(bottom_rule):
+                size = border_size(bottom_rule)
+                if size is not None:
+                    header_sizes.append(size)
+        if header_sizes and max(header_sizes) >= top_size:
+            add_issue(
+                issues,
+                "WARN",
+                "TABLE_RULES",
+                f"Table {table_index}'s header rule is not thinner than its top/bottom rules; expected header "
+                "w:sz≈6 vs top/bottom w:sz≈12.",
+                counts,
+            )
+
+
 def audit_table_borders(root: ET.Element, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:
     """Warn when a table has visible vertical/inner borders instead of a three-line layout."""
     for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
@@ -607,6 +781,42 @@ def audit_formulas(
             )
 
 
+def audit_math_duplication(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """FAIL when an OMML object's text also survives as plain text in the same paragraph.
+
+    This is the append-instead-of-replace failure: the model keeps the original
+    plain-text token in the prose and appends rendered math (typically at the end
+    of the paragraph) instead of swapping it in place.
+    """
+    for index, paragraph in enumerate(paragraphs, start=1):
+        maths = paragraph.findall(".//m:oMath", NS)
+        if not maths:
+            continue
+        plain = re.sub(r"\s+", "", paragraph_text(paragraph))
+        if not plain:
+            continue
+        for math in maths:
+            math_text = re.sub(
+                r"\s+", "", "".join(node.text or "" for node in math.findall(".//m:t", NS))
+            )
+            # Require a few characters so a lone symbol shared with unrelated prose
+            # (e.g. an OMML "Q" plus the letter Q elsewhere) is not misflagged.
+            if len(math_text) >= 4 and math_text in plain:
+                add_issue(
+                    issues,
+                    "FAIL",
+                    "MATH_DUPLICATE",
+                    f"Paragraph {index} contains rendered math '{math_text[:30]}' that also remains as plain "
+                    "text; the OMML must replace the original text in place, not be appended next to it.",
+                    counts,
+                )
+                break
+
+
 def audit_formula_digit_italics(root: ET.Element, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:
     """Warn when a number/operator inside a formula is italic (only variables should be italic).
 
@@ -649,6 +859,18 @@ def audit_equation_numbers(
                 ),
                 counts,
             )
+
+
+def load_part(docx_path: Path, name: str) -> Optional[str]:
+    """Read an optional part (e.g. word/styles.xml) from the DOCX; None when absent."""
+    try:
+        with zipfile.ZipFile(docx_path) as archive:
+            try:
+                return archive.read(name).decode("utf-8")
+            except KeyError:
+                return None
+    except (zipfile.BadZipFile, RuntimeError):
+        return None
 
 
 def load_document_xml(docx_path: Path) -> str:
@@ -716,6 +938,14 @@ def main() -> int:
             print(f"ERROR: {message}", file=sys.stderr)
         return 2
 
+    styles_root: Optional[ET.Element] = None
+    styles_xml = load_part(args.docx, "word/styles.xml")
+    if styles_xml:
+        try:
+            styles_root = ET.fromstring(styles_xml)
+        except ET.ParseError:
+            styles_root = None
+
     all_paragraphs = root.findall(".//w:body//w:p", NS)
     # Paragraph-based checks audit the main story only; table-cell paragraphs are excluded because
     # numbers/units/short fragments in cells produced many heading/punctuation/formula false positives.
@@ -736,11 +966,14 @@ def main() -> int:
     audit_fonts(paragraphs[:bib_index], issues, issue_counts)
     audit_tables(root, issues, issue_counts)
     audit_table_borders(root, issues, issue_counts)
+    audit_table_shading(root, issues, issue_counts, styles_root)
+    audit_table_rules(root, issues, issue_counts, styles_root)
     audit_color(root, issues, issue_counts)
     audit_captions(root, issues, issue_counts)
     audit_citations(document_xml, body_text, issues, issue_counts)
     audit_bare_citations(paragraphs[:bib_index], issues, issue_counts)
     audit_formulas(paragraphs[:bib_index], issues, issue_counts)
+    audit_math_duplication(paragraphs, issues, issue_counts)
     audit_formula_digit_italics(root, issues, issue_counts)
     audit_equation_numbers(paragraphs[:bib_index], issues, issue_counts)
 
