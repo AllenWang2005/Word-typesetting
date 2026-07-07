@@ -48,9 +48,32 @@ Do not skip inline math just because it is short. A single variable such as `Q`,
 - Use structured LaTeX for fractions, roots, sums, products, piecewise definitions, and aligned equations: `\frac{}`, `\sqrt{}`, `\sum`, `\prod`, `\begin{aligned}...\end{aligned}`.
 - Use Chinese explanatory text outside equations when possible. If Chinese text must appear inside a formula, use `\text{...}` and verify the OMML rendering.
 
-## Conversion Strategy
+## Deterministic Tooling (preferred)
 
-Prefer this pipeline for DOCX work:
+Do not hand-edit OOXML for formulas. Use `scripts/replace_math.py`, which performs
+the whole convert-and-splice as one deterministic operation:
+
+1. Run the discovery pass and write the registry as JSON — one entry per distinct
+   token: `{"find": "<exact original text>", "latex": "<LaTeX>"}`, plus
+   `"sz": 21` for in-table occurrences, `"display": true, "number": "(3-1)"`
+   for display equations (the token must then be the whole paragraph).
+2. Run `python scripts/replace_math.py report.docx registry.json --in-place`.
+   The script converts every LaTeX entry with Pandoc in one batch, splices each
+   OMML object at the token's exact position (in-place contract enforced by
+   construction: original text removed, prefix/suffix characters preserved,
+   cross-run tokens handled), and stamps `w:sz`/`w:szCs`.
+3. Read the JSON summary: `not_found` and `still_plain_text` must both be empty;
+   anything listed there is an unfinished conversion, not a success.
+4. For brand-new documents prefer authoring from source instead — see
+   `references/generate-from-source.md` (Markdown + LaTeX compiled by Pandoc,
+   correct by construction).
+
+`python scripts/replace_math.py --convert 'Q = \frac{W}{T}'` prints the OMML for
+one fragment when you need to inspect or splice manually.
+
+## Conversion Strategy (manual fallback)
+
+When the script cannot be used, prefer this pipeline for DOCX work:
 
 1. Replace each formula/symbol occurrence with a unique placeholder such as `@@MATH_001@@` while preserving surrounding paragraph/table structure.
 2. Store the LaTeX source in the formula registry. Use `$...$` for inline math and `$$...$$` or display blocks for display math.
@@ -70,9 +93,12 @@ When Pandoc is unavailable, use another route that still produces native Word OM
 
 ## Italic vs. upright (do not blanket-italicize)
 
-- Only variable letters are italic. Digits, operators, parentheses, commas, units, and function names are upright. In OMML this is the default — do **not** add `<w:i/>` to the whole equation, which forces the digits italic too (the most common failure).
+- Only variable letters are italic. Digits, operators, parentheses, commas, units, and function names are upright.
+- **Know the OMML defaults, they cut both ways.** Digits and operators are upright by default — do **not** add `<w:i/>` / `<m:sty m:val="i"/>` to the whole equation, which forces the digits italic too. But *letters* are **math-italic by default**: a unit like `km`, a function like `max`, or an explanatory subscript left as a bare `<m:r>` renders *italic* even though no italic marker exists anywhere in the XML. Upright text inside a formula must carry an explicit upright style, `<m:rPr><m:sty m:val="p"/></m:rPr>` (this is what Pandoc emits for `\mathrm{...}` / `\text{...}`) or `<m:nor/>`. "I didn't add italics" is not the same as "it renders upright".
+- So the LaTeX source must already mark every upright element (`\mathrm`, `\text`, standard function commands like `\max`); if the converted OMML lacks the `m:sty val="p"` markers, the styling was lost in conversion and must be fixed.
 - Multi-letter coefficients are not one italic variable: use one variable plus an upright subscript, e.g. recession coefficients `C_I` / `C_G` / `C_S` (italic `C`, upright `I`/`G`/`S`), never adjacent italic letters `CI` / `CG` (reads as `C × I`).
-- The auditor flags `FORMULA_DIGIT_ITALIC` (an italic number/operator) and `EQUATION_NUMBER_CENTER` (a centered numbered equation).
+- Never fake a formula with an italicized plain-text run (`F = 44.5 km²` in ordinary text with `w:i`) — that both bypasses OMML and slants the digits/units.
+- The auditor flags `FORMULA_DIGIT_ITALIC` (an italic number/operator, including inside mixed runs like an italic `F=44.5`), `FORMULA_MULTILETTER_ITALIC` (2+ adjacent letters in a formula with no explicit upright style — a unit/function left at the italic default, or a `CI`-style coefficient), `MANUAL_ITALIC_MATH` (an italicized plain-text pseudo-formula), and `EQUATION_NUMBER_CENTER` (a centered numbered equation).
 
 ## Verification
 

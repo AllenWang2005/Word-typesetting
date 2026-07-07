@@ -17,12 +17,14 @@ from xml.etree import ElementTree as ET
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 W = f"{{{W_NS}}}"
+M = f"{{{M_NS}}}"
 NS = {"w": W_NS, "m": M_NS}
 AUDIT_SCOPE = (
     "Main document story only: word/document.xml (plus word/styles.xml for table "
-    "style shading/borders). Headers, footers, footnotes, endnotes, comments, and "
-    "separate embedded parts are not audited by this script. Table-cell text is "
-    "checked for font size, borders, and shading only, not punctuation/heading/formula."
+    "style shading/borders and word/settings.xml for field updating). Headers, "
+    "footers, footnotes, endnotes, comments, and separate embedded parts are not "
+    "audited. Table-cell text is checked for font size, borders, shading, and "
+    "plain-text formulas (WARN), not punctuation/headings."
 )
 
 CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
@@ -54,8 +56,21 @@ LOOKS_LIKE_HEADING_RE = re.compile(
 )
 # Vertical / inner-vertical border tags: a three-line table must not have these.
 VERTICAL_BORDER_TAGS = ("left", "right", "insideV", "start", "end")
-# Inside OMML, only variable letters should be italic; digits/operators/parentheses are upright.
-FORMULA_NONLETTER_RE = re.compile(r"^[\s\d.,，;:；：()（）\[\]{}+\-*/=<>≤≥≈×·∙]+$")
+# Any digit or operator inside a formula run: if the run is italic, these render slanted.
+FORMULA_DIGIT_OPERATOR_RE = re.compile(r"[\d+\-*/=<>≤≥≈×·∙()（）]")
+# Two or more adjacent Latin letters in a formula: a unit, function name, or multi-letter
+# coefficient — never one italic variable.
+MULTILETTER_RE = re.compile(r"[A-Za-z]{2,}")
+# An italic plain-text run that visibly is an equation or a value-with-unit: manual italic math.
+ITALIC_TEXT_MATH_RE = re.compile(
+    r"[=≤≥≈<>]\s*\d|\d\s*[=≤≥≈<>]|\d\s*(?:km|mm|cm|kg|kN|kPa|MPa|kW|MW|kV|Hz|min)\b|\d\s*m[²³]"
+)
+# A number glued directly to a multi-letter unit (or m²/m³): needs a half-width space.
+UNIT_NOSPACE_RE = re.compile(r"\d(?:km|mm|cm|kg|kN|kPa|MPa|kW|MW|kV|Hz|min)(?![A-Za-z])|\dm(?=[²³/])")
+# A space before %, °, ℃ — these attach directly to the number.
+SPACE_BEFORE_ATTACHED_UNIT_RE = re.compile(r"\d[  　\t]+(?:%|℃|°C|°(?![CF]))")
+# A caption number such as 表 1-1 / 图 2.3 at the start of a caption paragraph.
+CAPTION_NUMBER_RE = re.compile(r"^(图|表)\s*(\d+(?:[-–—.]\d+)?)")
 # A display-equation number such as (3-3) or (式 3-3).
 EQUATION_NUMBER_RE = re.compile(r"[(（]\s*(?:式\s*)?\d+\s*[-–—]\s*\d+\s*[)）]")
 CN_BIB_HEADING_RE = re.compile(r"^(?:第?[一二三四五六七八九十0-9]+(?:章|节)?[、.．]?)?(参考文献|参考资料)$")
@@ -80,17 +95,24 @@ BARE_SYMBOL_DEFINITION_RE = re.compile(
     r"|(?:记为|表示为|定义为)\s*([A-Za-zͰ-Ͽ])(?![A-Za-zͰ-Ͽ])"
 )
 
-PROTECTED_PATTERNS = [
+# Non-numeric protected tokens (URLs, DOIs, emails, file names, citations, code).
+TOKEN_PROTECTED_PATTERNS = [
     re.compile(r"https?://\S+", re.I),
     re.compile(r"\bdoi\s*:\s*\S+", re.I),
     re.compile(r"\b10\.\d{4,9}/\S+", re.I),
     re.compile(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b"),
     re.compile(r"\S+\.(?:docx?|xlsx?|pptx?|pdf|csv|txt|dat|py|r|m)\b", re.I),
     re.compile(r"\[[0-9,\-\s]+\]"),
-    re.compile(r"\b\d+\.\d+\b"),
-    re.compile(r"\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b"),
     re.compile(r"\bref_\d+\b", re.I),
     re.compile(r"`[^`]+`"),
+]
+
+# Full protection additionally hides plain numbers (decimals, thousands separators);
+# used by the punctuation/formula checks, but NOT by checks that need the numbers
+# themselves (number-unit spacing, manual italic math).
+PROTECTED_PATTERNS = TOKEN_PROTECTED_PATTERNS + [
+    re.compile(r"\b\d+\.\d+\b"),
+    re.compile(r"\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b"),
 ]
 
 
@@ -111,6 +133,12 @@ def w_attr(element: Optional[ET.Element], name: str) -> Optional[str]:
     return element.get(f"{W}{name}")
 
 
+def m_attr(element: Optional[ET.Element], name: str) -> Optional[str]:
+    if element is None:
+        return None
+    return element.get(f"{M}{name}")
+
+
 def paragraph_text(paragraph: ET.Element) -> str:
     return "".join(node.text or "" for node in paragraph.findall(".//w:t", NS))
 
@@ -118,6 +146,14 @@ def paragraph_text(paragraph: ET.Element) -> str:
 def strip_protected(text: str) -> str:
     cleaned = text
     for pattern in PROTECTED_PATTERNS:
+        cleaned = pattern.sub(" ", cleaned)
+    return cleaned
+
+
+def strip_protected_tokens(text: str) -> str:
+    """Like strip_protected, but keeps plain numbers (for number-sensitive checks)."""
+    cleaned = text
+    for pattern in TOKEN_PROTECTED_PATTERNS:
         cleaned = pattern.sub(" ", cleaned)
     return cleaned
 
@@ -163,7 +199,23 @@ def run_is_italic(run: ET.Element) -> bool:
     italic = run.find("w:rPr/w:i", NS)
     if italic is not None and (w_attr(italic, "val") or "true").lower() not in ("false", "0", "off"):
         return True
-    return w_attr(run.find("m:rPr/m:sty", NS), "val") in ("i", "bi")
+    # OMML style uses the m:val attribute (m:sty m:val="i"), not w:val.
+    sty = run.find("m:rPr/m:sty", NS)
+    return (m_attr(sty, "val") or w_attr(sty, "val")) in ("i", "bi")
+
+
+def math_run_is_upright(run: ET.Element) -> bool:
+    """True when an m:r carries an explicit upright style (m:sty p/b or m:nor).
+
+    OMML letters render in *math italic by default*: the absence of any italic
+    marker does NOT mean upright. Units, function names, and explanatory
+    subscripts must carry m:sty val="p" (what Pandoc emits for \\mathrm/\\text)
+    or m:nor to actually display upright.
+    """
+    if run.find("m:rPr/m:nor", NS) is not None:
+        return True
+    sty = run.find("m:rPr/m:sty", NS)
+    return (m_attr(sty, "val") or w_attr(sty, "val")) in ("p", "b")
 
 
 def is_heading_style(style_id: str) -> bool:
@@ -821,13 +873,15 @@ def audit_formula_digit_italics(root: ET.Element, issues: list[Issue], counts: O
     """Warn when a number/operator inside a formula is italic (only variables should be italic).
 
     Usually caused by blanket-italicizing the whole equation, which also slants digits.
+    A mixed run such as an italic 'F=44.5' is flagged too — its digits are italic even
+    though the run also contains a letter.
     """
     for math in root.findall(".//m:oMath", NS):
         for run in math.findall(".//m:r", NS):
             text = "".join(node.text or "" for node in run.findall(".//m:t", NS))
-            if not text.strip() or any(ch.isalpha() for ch in text):
+            if not text.strip():
                 continue
-            if FORMULA_NONLETTER_RE.match(text) and run_is_italic(run):
+            if run_is_italic(run) and FORMULA_DIGIT_OPERATOR_RE.search(text):
                 add_issue(
                     issues,
                     "WARN",
@@ -836,6 +890,178 @@ def audit_formula_digit_italics(root: ET.Element, issues: list[Issue], counts: O
                     counts,
                 )
                 break
+
+
+def audit_formula_multiletter_italics(
+    root: ET.Element,
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """Warn about a multi-letter OMML run left at the default math-italic style.
+
+    Two or more adjacent Latin letters in a formula are never a single italic
+    variable: they are either a unit ('km', 'kW'), a function name ('max'), or a
+    multi-letter coefficient that must be one variable + upright subscript
+    ('C_I', not 'CI'). All of these need an explicit upright style — OMML letters
+    are italic by default, so 'no italic marker' still renders slanted.
+    """
+    for math in root.findall(".//m:oMath", NS):
+        for run in math.findall(".//m:r", NS):
+            text = "".join(node.text or "" for node in run.findall(".//m:t", NS))
+            if not MULTILETTER_RE.search(text):
+                continue
+            if not math_run_is_upright(run):
+                add_issue(
+                    issues,
+                    "WARN",
+                    "FORMULA_MULTILETTER_ITALIC",
+                    f"Formula run '{text.strip()[:20]}' has 2+ adjacent letters at OMML's default italic; "
+                    "units/functions need an explicit upright style (m:sty val=\"p\", LaTeX \\mathrm), and a "
+                    "multi-letter coefficient must become one variable + upright subscript.",
+                    counts,
+                )
+                break
+
+
+def audit_manual_italic_math(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """FAIL on a manually italicized plain-text pseudo-formula.
+
+    The observed failure mode: instead of OMML, the model writes 'F = 44.5 km²'
+    as an ordinary italic text run — which both fakes the equation and slants
+    the digits/units. Only ordinary w:r runs are inspected (OMML has its own checks).
+    """
+    for index, paragraph in enumerate(paragraphs, start=1):
+        for run in paragraph.findall("w:r", NS):
+            text = run_text(run)
+            if not text.strip() or not run_is_italic(run):
+                continue
+            if ITALIC_TEXT_MATH_RE.search(strip_protected_tokens(text)):
+                add_issue(
+                    issues,
+                    "FAIL",
+                    "MANUAL_ITALIC_MATH",
+                    f"Paragraph {index} has an italicized plain-text formula ('{text.strip()[:40]}'); this must "
+                    "be a LaTeX-rendered OMML object, and italics never apply to digits/units anyway.",
+                    counts,
+                )
+                break
+
+
+def audit_caption_alignment(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """Warn when a 表/图 caption paragraph is not centered.
+
+    A caption using a named style with no direct alignment is left alone (the
+    style may center it); direct-formatted captions must carry jc=center.
+    """
+    for index, paragraph in enumerate(paragraphs, start=1):
+        text = paragraph_text(paragraph).strip()
+        if not (TABLE_CAPTION_RE.match(text) or FIGURE_CAPTION_RE.match(text)):
+            continue
+        alignment = paragraph_alignment(paragraph)
+        if alignment == "center":
+            continue
+        if alignment is None and paragraph_style(paragraph):
+            continue
+        add_issue(
+            issues,
+            "WARN",
+            "CAPTION_ALIGN",
+            f"Caption paragraph {index} is not centered: {text[:60]}",
+            counts,
+        )
+
+
+def audit_number_unit_spacing(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """Warn on number–unit spacing errors: '20km' needs a space, '50 %' must attach."""
+    for index, paragraph in enumerate(paragraphs, start=1):
+        text = paragraph_text(paragraph)
+        if not text.strip():
+            continue
+        cleaned = strip_protected_tokens(text)
+        sample = text.strip().replace("\n", " ")[:80]
+        if UNIT_NOSPACE_RE.search(cleaned):
+            add_issue(
+                issues,
+                "WARN",
+                "NUMBER_UNIT_SPACING",
+                f"Paragraph {index} has a number glued to its unit (e.g. '20km'); use a half-width "
+                f"space: '20 km': {sample}",
+                counts,
+            )
+        if SPACE_BEFORE_ATTACHED_UNIT_RE.search(cleaned):
+            add_issue(
+                issues,
+                "WARN",
+                "NUMBER_UNIT_SPACING",
+                f"Paragraph {index} has a space before %, °, or ℃; these attach directly (50%, 25℃): {sample}",
+                counts,
+            )
+
+
+def audit_float_order(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """Warn when a figure/table appears before its first in-text reference.
+
+    Only the unambiguous inversion is flagged: the caption has no mention earlier
+    in the document but IS mentioned later ("先出现后引用"). A caption with no
+    mention at all is left to human review.
+    """
+    texts = [paragraph_text(p) for p in paragraphs]
+    for index, text in enumerate(texts):
+        match = CAPTION_NUMBER_RE.match(text.strip())
+        if not match:
+            continue
+        kind, number = match.group(1), match.group(2)
+        token = re.compile(rf"{kind}\s*{re.escape(number)}(?![\d.\-–—])")
+        mentioned_before = any(token.search(t) for t in texts[:index])
+        mentioned_after = any(token.search(t) for t in texts[index + 1 :])
+        if not mentioned_before and mentioned_after:
+            add_issue(
+                issues,
+                "WARN",
+                "FLOAT_ORDER",
+                f"{kind} {number} appears before its first in-text reference; figures/tables must be "
+                "referenced first, then placed nearby after the reference.",
+                counts,
+            )
+
+
+def audit_table_header_repeat(
+    root: ET.Element,
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """Warn when a multi-row table's header row is not set to repeat across pages."""
+    for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
+        rows = table.findall("w:tr", NS)
+        if len(rows) < 2:
+            continue
+        header = rows[0].find("w:trPr/w:tblHeader", NS)
+        repeats = header is not None and (w_attr(header, "val") or "true").lower() not in ("false", "0", "off")
+        if not repeats:
+            add_issue(
+                issues,
+                "WARN",
+                "TABLE_HEADER_REPEAT",
+                f"Table {table_index}'s header row is not marked to repeat across page breaks "
+                "(w:trPr/w:tblHeader on the first row).",
+                counts,
+            )
 
 
 def audit_equation_numbers(
@@ -859,6 +1085,154 @@ def audit_equation_numbers(
                 ),
                 counts,
             )
+
+
+def audit_table_formula_text(
+    root: ET.Element,
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """WARN about plain-text formulas/symbols inside table cells.
+
+    Table-cell paragraphs are excluded from the strict body formula check to
+    avoid numeric false positives, but visible LaTeX, `X_y` subscripts, and
+    equations in cells are high-confidence signals and are reported here.
+    """
+    for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
+        for paragraph in table.findall(".//w:p", NS):
+            text = paragraph_text(paragraph).strip()
+            if not text or has_omml(paragraph):
+                continue
+            cleaned = strip_protected(text)
+            if VISIBLE_LATEX_RE.search(cleaned) or TEXT_SUBSCRIPT_RE.search(cleaned) or TEXT_EQUATION_RE.search(cleaned):
+                add_issue(
+                    issues,
+                    "WARN",
+                    "FORMULA_TEXT_TABLE",
+                    f"Table {table_index} has a cell with likely plain-text formula/symbol content "
+                    f"that should be OMML (at table size 五号): {text[:60]}",
+                    counts,
+                )
+                break
+
+
+def audit_equation_number_tabs(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """WARN when a numbered display equation has no right tab stop.
+
+    Without a right tab, the number cannot be right-aligned. (A centered
+    paragraph is already flagged by EQUATION_NUMBER_CENTER.)
+    """
+    for index, paragraph in enumerate(paragraphs, start=1):
+        if not has_omml(paragraph):
+            continue
+        text = paragraph_text(paragraph)
+        if not EQUATION_NUMBER_RE.search(text) or paragraph_alignment(paragraph) == "center":
+            continue
+        tabs = paragraph.findall("w:pPr/w:tabs/w:tab", NS)
+        if not any(w_attr(tab, "val") == "right" for tab in tabs):
+            add_issue(
+                issues,
+                "WARN",
+                "EQUATION_NUMBER_TABS",
+                f"Paragraph {index} numbers a display equation but has no right tab stop; use a "
+                "left-aligned paragraph with a center tab (equation) and a right tab (number): "
+                f"{text.strip()[:50]}",
+                counts,
+            )
+
+
+def audit_fields_update(
+    document_xml: str,
+    settings_xml: Optional[str],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """WARN when the document has fields but Word is not told to refresh them on open.
+
+    TOC page numbers and REF cross-references are field results frozen at edit
+    time; scripted edits do not recalculate them. Setting w:updateFields in
+    word/settings.xml makes MS Word (the canonical renderer) refresh every
+    field when the document is opened.
+    """
+    has_fields = "REF ref_" in document_xml or " TOC " in document_xml or "instrText" in document_xml
+    if not has_fields:
+        return
+    if settings_xml is None or "updateFields" not in settings_xml:
+        add_issue(
+            issues,
+            "WARN",
+            "FIELDS_UPDATE",
+            "The document contains fields (TOC/REF) but word/settings.xml has no w:updateFields; "
+            "field results may be stale. Run normalize_docx.py --update-fields so Word refreshes "
+            "them on open.",
+            counts,
+        )
+
+
+def audit_firstline_indent_unit(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """WARN when first-line indents use fixed twips instead of characters.
+
+    The standard's 首行缩进 2 字符 must scale with the font, i.e.
+    w:firstLineChars="200". A bare w:firstLine (twips) looks right at one font
+    size and wrong at another. Word writes both together; only a lone
+    w:firstLine is flagged.
+    """
+    for index, paragraph in enumerate(paragraphs, start=1):
+        ind = paragraph.find("w:pPr/w:ind", NS)
+        if ind is None:
+            continue
+        if w_attr(ind, "firstLine") not in (None, "0") and w_attr(ind, "firstLineChars") is None:
+            add_issue(
+                issues,
+                "WARN",
+                "FIRSTLINE_FIXED",
+                f"Paragraph {index} indents its first line in fixed twips (w:firstLine) without "
+                "w:firstLineChars; Chinese first-line indents should be character-based (2 字符 = "
+                "firstLineChars=\"200\") so they scale with the font size.",
+                counts,
+                limit=3,
+            )
+
+
+def audit_package_integrity(docx_path: Path, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:
+    """FAIL when the DOCX package itself is damaged or missing required parts.
+
+    A document that triggers Word's repair prompt is a worse failure than any
+    formatting issue, so this is checked first.
+    """
+    required = ("[Content_Types].xml", "word/document.xml", "word/_rels/document.xml.rels")
+    try:
+        with zipfile.ZipFile(docx_path) as archive:
+            bad_member = archive.testzip()
+            if bad_member is not None:
+                add_issue(issues, "FAIL", "PACKAGE_INTEGRITY", f"Corrupt zip member: {bad_member}", counts)
+                return
+            names = set(archive.namelist())
+            for name in required:
+                if name not in names:
+                    add_issue(
+                        issues,
+                        "FAIL",
+                        "PACKAGE_INTEGRITY",
+                        f"Missing required package part {name}; Word may refuse or repair the file.",
+                        counts,
+                    )
+            rels = "word/_rels/document.xml.rels"
+            if rels in names:
+                try:
+                    ET.fromstring(archive.read(rels))
+                except ET.ParseError:
+                    add_issue(issues, "FAIL", "PACKAGE_INTEGRITY", f"{rels} is not well-formed XML.", counts)
+    except (zipfile.BadZipFile, OSError) as exc:
+        add_issue(issues, "FAIL", "PACKAGE_INTEGRITY", f"Cannot read package: {exc}", counts)
 
 
 def load_part(docx_path: Path, name: str) -> Optional[str]:
@@ -945,6 +1319,7 @@ def main() -> int:
             styles_root = ET.fromstring(styles_xml)
         except ET.ParseError:
             styles_root = None
+    settings_xml = load_part(args.docx, "word/settings.xml")
 
     all_paragraphs = root.findall(".//w:body//w:p", NS)
     # Paragraph-based checks audit the main story only; table-cell paragraphs are excluded because
@@ -959,6 +1334,7 @@ def main() -> int:
 
     issues: list[Issue] = []
     issue_counts: dict[tuple[str, str], int] = {}
+    audit_package_integrity(args.docx, issues, issue_counts)
     audit_punctuation(paragraphs[:bib_index], language, issues, issue_counts)
     audit_abstract_keywords(paragraphs, issues, issue_counts)
     audit_headings(paragraphs, issues, issue_counts)
@@ -968,14 +1344,24 @@ def main() -> int:
     audit_table_borders(root, issues, issue_counts)
     audit_table_shading(root, issues, issue_counts, styles_root)
     audit_table_rules(root, issues, issue_counts, styles_root)
+    audit_table_header_repeat(root, issues, issue_counts)
     audit_color(root, issues, issue_counts)
     audit_captions(root, issues, issue_counts)
+    audit_caption_alignment(paragraphs, issues, issue_counts)
+    audit_float_order(paragraphs, issues, issue_counts)
     audit_citations(document_xml, body_text, issues, issue_counts)
     audit_bare_citations(paragraphs[:bib_index], issues, issue_counts)
     audit_formulas(paragraphs[:bib_index], issues, issue_counts)
     audit_math_duplication(paragraphs, issues, issue_counts)
+    audit_manual_italic_math(paragraphs[:bib_index], issues, issue_counts)
     audit_formula_digit_italics(root, issues, issue_counts)
+    audit_formula_multiletter_italics(root, issues, issue_counts)
+    audit_table_formula_text(root, issues, issue_counts)
+    audit_number_unit_spacing(paragraphs[:bib_index], issues, issue_counts)
     audit_equation_numbers(paragraphs[:bib_index], issues, issue_counts)
+    audit_equation_number_tabs(paragraphs[:bib_index], issues, issue_counts)
+    audit_fields_update(document_xml, settings_xml, issues, issue_counts)
+    audit_firstline_indent_unit(paragraphs[:bib_index], issues, issue_counts)
 
     omml_count = len(root.findall(".//m:oMath", NS)) + len(root.findall(".//m:oMathPara", NS))
     summary, omitted = summarize_issues(issues, issue_counts)
@@ -1003,7 +1389,7 @@ def main() -> int:
     print(f"Document language: {language} (CJK chars={cjk_count}, Latin letters={latin_count}, OMML objects={omml_count})")
     print(f"Audit scope: {AUDIT_SCOPE}")
     if not issues:
-        print("PASS: no machine-detected guardrail issues.")
+        print("PASS: no machine-detected guardrail issues (within audit scope; a visual check in MS Word is still required).")
         print("Summary: FAIL=0 WARN=0 printed=0 omitted=0")
         return 0
 

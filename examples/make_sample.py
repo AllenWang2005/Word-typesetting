@@ -16,6 +16,7 @@ has something to report:
   * full-width and field-less citation brackets
   * a bare superscript citation number with no brackets
   * plain-text formula / visible LaTeX instead of OMML
+  * a manually italicized plain-text pseudo-formula
   * non-black body font color
   * a heading in Songti that ends with punctuation
   * a table caption placed below its table
@@ -44,7 +45,8 @@ def _set_border(parent, tag: str, val: str, sz: str = "") -> None:
 
 
 def make_three_line(table) -> None:
-    """Give a python-docx table explicit three-line borders and a white background."""
+    """Give a python-docx table explicit three-line borders, a white background,
+    and a header row that repeats across page breaks."""
     tbl_pr = table._tbl.tblPr
     borders = OxmlElement("w:tblBorders")
     _set_border(borders, "top", "single", "12")
@@ -62,6 +64,8 @@ def make_three_line(table) -> None:
         shd.set(qn("w:color"), "auto")
         shd.set(qn("w:fill"), "auto")
         tc_pr.append(shd)
+    tr_pr = table.rows[0]._tr.get_or_add_trPr()
+    tr_pr.append(OxmlElement("w:tblHeader"))
 
 
 def build(path: str) -> None:
@@ -87,6 +91,12 @@ def build(path: str) -> None:
     # Plain-text formula and visible LaTeX (should be native OMML).
     doc.add_paragraph("式中 N_p 为水泵台数，反映系统的装机规模。")
     doc.add_paragraph("两者比值可用 \\frac{a}{b} 表示，需要渲染为公式对象。")
+
+    # A manually italicized plain-text pseudo-formula (should be OMML; italics
+    # must never cover digits/units).
+    fake = doc.add_paragraph()
+    fake_run = fake.add_run("F = 44.5 km²")
+    fake_run.italic = True
 
     # Citations with full-width brackets and a field-less ASCII bracket.
     doc.add_paragraph("已有研究表明该方法有效［1］，并在工程中得到验证[2]。")

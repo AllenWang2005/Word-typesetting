@@ -36,6 +36,26 @@ aud = _load_audit_module()
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 
+
+CONTENT_TYPES = (
+    '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+    '<Default Extension="xml" ContentType="application/xml"/>'
+    '<Override PartName="/word/document.xml" '
+    'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+)
+DOCUMENT_RELS = (
+    '<?xml version="1.0"?>'
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'
+)
+
+
+def write_minimal_docx(path: str, document: str) -> None:
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("[Content_Types].xml", CONTENT_TYPES)
+        archive.writestr("word/_rels/document.xml.rels", DOCUMENT_RELS)
+        archive.writestr("word/document.xml", document)
+
+
 def make_p(text: str, jc: Optional[str] = None, first_line: Optional[str] = None, style: Optional[str] = None) -> ET.Element:
     ppr = ""
     if style:
@@ -82,8 +102,7 @@ def run_main_json(body_inner: str) -> dict:
     with tempfile.TemporaryDirectory() as folder:
         path = os.path.join(folder, "doc.docx")
         document = f'<w:document xmlns:w="{W}"><w:body>{body_inner}</w:body></w:document>'
-        with zipfile.ZipFile(path, "w") as archive:
-            archive.writestr("word/document.xml", document)
+        write_minimal_docx(path, document)
         saved_argv = sys.argv
         sys.argv = ["audit", path, "--json", "--language", "zh"]
         buffer = io.StringIO()
@@ -543,8 +562,7 @@ class JsonOutputTests(unittest.TestCase):
                 f'并且不包含任何明显的排版问题，因此机器审计的结果应当顺利通过检查。</w:t></w:r></w:p>'
                 f'</w:body></w:document>'
             )
-            with zipfile.ZipFile(path, "w") as archive:
-                archive.writestr("word/document.xml", document)
+            write_minimal_docx(path, document)
             saved_argv = sys.argv
             sys.argv = ["audit", path, "--json"]
             buffer = io.StringIO()
@@ -601,6 +619,283 @@ class EquationNumberTests(unittest.TestCase):
         issues = []
         aud.audit_equation_numbers([self._eq("left")], issues)
         self.assertNotIn("EQUATION_NUMBER_CENTER", codes(issues))
+
+
+class FormulaMixedItalicTests(unittest.TestCase):
+    MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+
+    def _math(self, run_xml: str) -> ET.Element:
+        return ET.fromstring(
+            f'<w:document xmlns:w="{W}" xmlns:m="{self.MATH_NS}"><w:body><w:p>'
+            f'<m:oMath>{run_xml}</m:oMath></w:p></w:body></w:document>'
+        )
+
+    def test_mixed_italic_run_with_digits_flagged(self):
+        # A single italic run 'F=44.5' slants its digits even though it contains a letter.
+        issues = []
+        aud.audit_formula_digit_italics(
+            self._math('<m:r><w:rPr><w:i/></w:rPr><m:t>F=44.5</m:t></m:r>'), issues
+        )
+        self.assertIn("FORMULA_DIGIT_ITALIC", codes(issues))
+
+    def test_omml_sty_mval_italic_digits_flagged(self):
+        # OMML style italics use m:sty m:val="i" (the m namespace), not w:val.
+        issues = []
+        aud.audit_formula_digit_italics(
+            self._math(
+                '<m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>44.5</m:t></m:r>'
+            ),
+            issues,
+        )
+        self.assertIn("FORMULA_DIGIT_ITALIC", codes(issues))
+
+    def test_multiletter_default_italic_flagged(self):
+        # 'km' with no upright style renders math-italic by default — no w:i needed.
+        issues = []
+        aud.audit_formula_multiletter_italics(self._math('<m:r><m:t>km</m:t></m:r>'), issues)
+        self.assertIn("FORMULA_MULTILETTER_ITALIC", codes(issues))
+
+    def test_multiletter_upright_sty_ok(self):
+        issues = []
+        aud.audit_formula_multiletter_italics(
+            self._math('<m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t>km</m:t></m:r>'), issues
+        )
+        self.assertNotIn("FORMULA_MULTILETTER_ITALIC", codes(issues))
+
+    def test_multiletter_nor_ok(self):
+        issues = []
+        aud.audit_formula_multiletter_italics(
+            self._math('<m:r><m:rPr><m:nor/></m:rPr><m:t>max</m:t></m:r>'), issues
+        )
+        self.assertNotIn("FORMULA_MULTILETTER_ITALIC", codes(issues))
+
+    def test_single_letter_variable_ok(self):
+        issues = []
+        aud.audit_formula_multiletter_italics(self._math('<m:r><m:t>Q</m:t></m:r>'), issues)
+        self.assertNotIn("FORMULA_MULTILETTER_ITALIC", codes(issues))
+
+
+class ManualItalicMathTests(unittest.TestCase):
+    def _p(self, text: str, italic: bool) -> ET.Element:
+        rpr = "<w:rPr><w:i/></w:rPr>" if italic else ""
+        return ET.fromstring(
+            f'<w:p xmlns:w="{W}"><w:r>{rpr}<w:t xml:space="preserve">{text}</w:t></w:r></w:p>'
+        )
+
+    def test_italic_equation_run_flagged(self):
+        issues = []
+        aud.audit_manual_italic_math([self._p("F = 44.5 km²", True)], issues)
+        self.assertIn("MANUAL_ITALIC_MATH", codes(issues))
+
+    def test_upright_equation_run_not_flagged_here(self):
+        # Plain-text math without italics is FORMULA_TEXT's job, not this check's.
+        issues = []
+        aud.audit_manual_italic_math([self._p("F = 44.5 km²", False)], issues)
+        self.assertNotIn("MANUAL_ITALIC_MATH", codes(issues))
+
+    def test_italic_prose_without_math_ok(self):
+        issues = []
+        aud.audit_manual_italic_math([self._p("Journal of Hydrology", True)], issues)
+        self.assertNotIn("MANUAL_ITALIC_MATH", codes(issues))
+
+
+class CaptionAlignmentTests(unittest.TestCase):
+    def test_left_aligned_caption_flagged(self):
+        issues = []
+        aud.audit_caption_alignment([make_p("表 1-1 方案比较", jc="left")], issues)
+        self.assertIn("CAPTION_ALIGN", codes(issues))
+
+    def test_centered_caption_ok(self):
+        issues = []
+        aud.audit_caption_alignment([make_p("图 2-3 流量过程线", jc="center")], issues)
+        self.assertNotIn("CAPTION_ALIGN", codes(issues))
+
+    def test_styled_caption_without_direct_jc_ok(self):
+        # A named style may center the caption; only direct formatting is judged.
+        issues = []
+        aud.audit_caption_alignment([make_p("表 1-1 方案比较", style="Caption")], issues)
+        self.assertNotIn("CAPTION_ALIGN", codes(issues))
+
+
+class NumberUnitSpacingTests(unittest.TestCase):
+    def test_glued_unit_flagged(self):
+        issues = []
+        aud.audit_number_unit_spacing([make_p("最大流量为20km处的断面控制。")], issues)
+        self.assertIn("NUMBER_UNIT_SPACING", codes(issues))
+
+    def test_glued_cubic_metre_flagged(self):
+        issues = []
+        aud.audit_number_unit_spacing([make_p("设计流量为216m³/s。")], issues)
+        self.assertIn("NUMBER_UNIT_SPACING", codes(issues))
+
+    def test_spaced_unit_ok(self):
+        issues = []
+        aud.audit_number_unit_spacing([make_p("设计流量为 216 m³/s，距离为 20 km。")], issues)
+        self.assertNotIn("NUMBER_UNIT_SPACING", codes(issues))
+
+    def test_space_before_percent_flagged(self):
+        issues = []
+        aud.audit_number_unit_spacing([make_p("设计频率为 0.1 %的洪水。")], issues)
+        self.assertIn("NUMBER_UNIT_SPACING", codes(issues))
+
+    def test_attached_percent_ok(self):
+        issues = []
+        aud.audit_number_unit_spacing([make_p("设计频率为0.1%的洪水，水温 25℃。")], issues)
+        self.assertNotIn("NUMBER_UNIT_SPACING", codes(issues))
+
+
+class FloatOrderTests(unittest.TestCase):
+    def test_caption_before_first_reference_flagged(self):
+        issues = []
+        paragraphs = [
+            make_p("表 1-1 方案比较"),
+            make_p("正文在表格之后才提到，如表 1-1 所示。"),
+        ]
+        aud.audit_float_order(paragraphs, issues)
+        self.assertIn("FLOAT_ORDER", codes(issues))
+
+    def test_reference_before_caption_ok(self):
+        issues = []
+        paragraphs = [
+            make_p("各方案指标如表 1-1 所示。"),
+            make_p("表 1-1 方案比较"),
+        ]
+        aud.audit_float_order(paragraphs, issues)
+        self.assertNotIn("FLOAT_ORDER", codes(issues))
+
+    def test_unreferenced_caption_not_flagged(self):
+        # No mention anywhere: left to human review, not flagged as inverted order.
+        issues = []
+        aud.audit_float_order([make_p("表 1-1 方案比较")], issues)
+        self.assertNotIn("FLOAT_ORDER", codes(issues))
+
+
+class TableHeaderRepeatTests(unittest.TestCase):
+    def _table(self, header: bool, rows: int = 2) -> ET.Element:
+        trpr = "<w:trPr><w:tblHeader/></w:trPr>" if header else ""
+        first = f"<w:tr>{trpr}<w:tc><w:p><w:r><w:t>h</w:t></w:r></w:p></w:tc></w:tr>"
+        body = "<w:tr><w:tc><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr>" * (rows - 1)
+        return make_doc(f"<w:tbl>{first}{body}</w:tbl>")
+
+    def test_multirow_without_repeat_flagged(self):
+        issues = []
+        aud.audit_table_header_repeat(self._table(header=False), issues)
+        self.assertIn("TABLE_HEADER_REPEAT", codes(issues))
+
+    def test_multirow_with_repeat_ok(self):
+        issues = []
+        aud.audit_table_header_repeat(self._table(header=True), issues)
+        self.assertNotIn("TABLE_HEADER_REPEAT", codes(issues))
+
+    def test_single_row_table_ok(self):
+        issues = []
+        aud.audit_table_header_repeat(self._table(header=False, rows=1), issues)
+        self.assertNotIn("TABLE_HEADER_REPEAT", codes(issues))
+
+
+class TableFormulaTextTests(unittest.TestCase):
+    def _table_with_cell(self, cell_text: str) -> ET.Element:
+        return make_doc(
+            f'<w:tbl><w:tr><w:tc><w:p><w:r><w:t xml:space="preserve">{cell_text}</w:t></w:r></w:p>'
+            f"</w:tc></w:tr></w:tbl>"
+        )
+
+    def test_equation_in_cell_flagged(self):
+        issues = []
+        aud.audit_table_formula_text(self._table_with_cell("Q_p=W/T"), issues)
+        self.assertIn("FORMULA_TEXT_TABLE", codes(issues))
+
+    def test_numeric_cell_not_flagged(self):
+        issues = []
+        aud.audit_table_formula_text(self._table_with_cell("216.5"), issues)
+        self.assertNotIn("FORMULA_TEXT_TABLE", codes(issues))
+
+    def test_plain_label_cell_not_flagged(self):
+        issues = []
+        aud.audit_table_formula_text(self._table_with_cell("方案比较"), issues)
+        self.assertNotIn("FORMULA_TEXT_TABLE", codes(issues))
+
+
+class EquationNumberTabsTests(unittest.TestCase):
+    MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+
+    def _eq(self, tabs: bool) -> ET.Element:
+        tabs_xml = (
+            '<w:tabs><w:tab w:val="center" w:pos="4536"/><w:tab w:val="right" w:pos="9072"/></w:tabs>'
+            if tabs
+            else ""
+        )
+        return ET.fromstring(
+            f'<w:p xmlns:w="{W}" xmlns:m="{self.MATH_NS}"><w:pPr>{tabs_xml}</w:pPr>'
+            f"<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath><w:r><w:t>(3-3)</w:t></w:r></w:p>"
+        )
+
+    def test_numbered_equation_without_right_tab_flagged(self):
+        issues = []
+        aud.audit_equation_number_tabs([self._eq(tabs=False)], issues)
+        self.assertIn("EQUATION_NUMBER_TABS", codes(issues))
+
+    def test_numbered_equation_with_right_tab_ok(self):
+        issues = []
+        aud.audit_equation_number_tabs([self._eq(tabs=True)], issues)
+        self.assertNotIn("EQUATION_NUMBER_TABS", codes(issues))
+
+
+class FieldsUpdateTests(unittest.TestCase):
+    def test_fields_without_updatefields_flagged(self):
+        issues = []
+        aud.audit_fields_update('<w:instrText> REF ref_001 \\h </w:instrText>', None, issues)
+        self.assertIn("FIELDS_UPDATE", codes(issues))
+
+    def test_fields_with_updatefields_ok(self):
+        issues = []
+        settings = '<w:settings><w:updateFields w:val="true"/></w:settings>'
+        aud.audit_fields_update('<w:instrText> REF ref_001 \\h </w:instrText>', settings, issues)
+        self.assertNotIn("FIELDS_UPDATE", codes(issues))
+
+    def test_document_without_fields_ok(self):
+        issues = []
+        aud.audit_fields_update("<w:document><w:body/></w:document>", None, issues)
+        self.assertNotIn("FIELDS_UPDATE", codes(issues))
+
+
+class FirstlineIndentUnitTests(unittest.TestCase):
+    def _p(self, ind: str) -> ET.Element:
+        return ET.fromstring(
+            f'<w:p xmlns:w="{W}"><w:pPr><w:ind {ind}/></w:pPr>'
+            f"<w:r><w:t>正文段落。</w:t></w:r></w:p>"
+        )
+
+    def test_fixed_twip_indent_flagged(self):
+        issues = []
+        aud.audit_firstline_indent_unit([self._p('w:firstLine="480"')], issues)
+        self.assertIn("FIRSTLINE_FIXED", codes(issues))
+
+    def test_char_based_indent_ok(self):
+        issues = []
+        aud.audit_firstline_indent_unit(
+            [self._p('w:firstLine="480" w:firstLineChars="200"')], issues
+        )
+        self.assertNotIn("FIRSTLINE_FIXED", codes(issues))
+
+
+class PackageIntegrityTests(unittest.TestCase):
+    def test_missing_required_parts_flagged(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "bare.docx")
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("word/document.xml", "<w:document/>")
+            issues = []
+            aud.audit_package_integrity(pathlib.Path(path), issues)
+        self.assertIn("PACKAGE_INTEGRITY", codes(issues))
+
+    def test_complete_package_ok(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "ok.docx")
+            write_minimal_docx(path, f'<w:document xmlns:w="{W}"><w:body/></w:document>')
+            issues = []
+            aud.audit_package_integrity(pathlib.Path(path), issues)
+        self.assertNotIn("PACKAGE_INTEGRITY", codes(issues))
 
 
 class SummaryTests(unittest.TestCase):

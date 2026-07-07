@@ -129,7 +129,10 @@ python scripts/audit_docx_format.py path/to/report.docx --json   # 机器可读
 | `TABLE_BORDERS` | WARN | 表格有竖线/内部网格(非三线表) |
 | `TABLE_SHADING` | FAIL | 表格/单元格带底纹,含表格样式 `firstRow` 条件格式带来的表头底纹(三线表必须白底) |
 | `TABLE_RULES` | WARN | 三线不对:顶/底线缺失、行间横线、或表头下线不比顶/底线细 |
+| `TABLE_HEADER_REPEAT` | WARN | 多行表格表头未设跨页重复(`w:tblHeader`) |
 | `CAPTION_POSITION` | WARN | 表题在表下 / 图题在图上 |
+| `CAPTION_ALIGN` | WARN | 表题/图题段落没有居中 |
+| `FLOAT_ORDER` | WARN | 图/表出现在正文首次引用之前(应先引用后出现) |
 | `COLOR` | WARN | 多余的非黑色字体(已排除超链接/主题色) |
 | `CITATION_BRACKETS` | FAIL | 全角引用括号 `［1］` |
 | `CITATION_FIELDS` | FAIL | 有引用但无 `REF ref_###` 字段 |
@@ -137,24 +140,40 @@ python scripts/audit_docx_format.py path/to/report.docx --json   # 机器可读
 | `VISIBLE_LATEX` | FAIL | 残留可见 LaTeX 源码而非 OMML |
 | `FORMULA_TEXT` | FAIL/WARN | 本应是 OMML 的纯文本公式/量符号 |
 | `MATH_DUPLICATE` | FAIL | 公式对象的内容仍以纯文本形式留在同一段落(追加而非原位替换) |
-| `FORMULA_DIGIT_ITALIC` | WARN | 公式里的数字/运算符被斜体(只有变量该斜体) |
+| `FORMULA_DIGIT_ITALIC` | WARN | 公式里的数字/运算符被斜体,含斜体 `F=44.5` 这类混合 run |
+| `FORMULA_MULTILETTER_ITALIC` | WARN | 公式里 2+ 相邻字母停留在 OMML 默认斜体(单位/函数名需 `m:sty="p"` 正体;`CI` 式系数需拆开) |
+| `MANUAL_ITALIC_MATH` | FAIL | 用普通文本手工斜体冒充公式(如斜体 `F = 44.5 km²`) |
+| `NUMBER_UNIT_SPACING` | WARN | 数字与单位粘连(`20km` 应为 `20 km`),或 `%`/`°`/`℃` 前多了空格 |
 | `EQUATION_NUMBER_CENTER` | WARN | 带编号的独立公式整体居中(编号应靠右) |
+| `EQUATION_NUMBER_TABS` | WARN | 带编号的独立公式没有右对齐制表位放编号 |
+| `FORMULA_TEXT_TABLE` | WARN | 表格单元格里残留本应是 OMML 的纯文本公式/符号 |
+| `FIELDS_UPDATE` | WARN | 有 TOC/REF 域但未设 `w:updateFields`(域结果可能过期) |
+| `FIRSTLINE_FIXED` | WARN | 首行缩进用固定 twip 而非字符(`firstLineChars`) |
+| `PACKAGE_INTEGRITY` | FAIL | zip 成员损坏或缺少必需包部件 |
 
 它刻意保持**领域中立**——不写死任何学科专有符号表。
 
-**审计范围:** 脚本检查 `word/document.xml` 主文档流(另读 `word/styles.xml` 以核查表格样式底纹/边框),不检查页眉、页脚、脚注、尾注、批注或嵌入部件——这些需人工或更深的 OOXML 检查。表格单元格内的文字只查字号和边框,不查标点/标题/公式(以避免单元格里的数字和短片段造成误报)。
+**审计范围:** 脚本检查 `word/document.xml` 主文档流(另读 `word/styles.xml` 核查表格样式底纹/边框、`word/settings.xml` 核查域刷新),不检查页眉、页脚、脚注、尾注、批注或嵌入部件——这些需人工或更深的 OOXML 检查。表格单元格内的文字查字号、边框、底纹和纯文本公式(WARN 级),不查标点/标题(以避免单元格里的数字和短片段造成误报)。
 
 ## 自动修复脚本
 
-`scripts/normalize_docx.py` 机械修复两项最安全的问题——全角引用括号(`［1］` → `[1]`)和
-CJK 之间误用的 ASCII 句读(`中文,中文` → `中文，中文`),其余字节原样保留:
+`scripts/normalize_docx.py` 机械修复安全问题,其余字节原样保留。默认开启:全角引用括号(`［1］` → `[1]`)和 CJK 之间误用的 ASCII 句读(`中文,中文` → `中文，中文`)。可选开关:`--units`(`20km` → `20 km`、`50 %` → `50%`)、`--tables`(清表内底纹、归零 `w:tblLook`、表头行跨页重复)、`--update-fields`(让 MS Word 打开时自动刷新 TOC/REF 域)、`--all`:
 
 ```text
 python scripts/normalize_docx.py report.docx -o report.fixed.docx
-python scripts/normalize_docx.py report.docx --in-place
+python scripts/normalize_docx.py report.docx --all --in-place
 ```
 
-它**不会**改字体、样式、公式或交叉引用——那些需要判断,留给模型 + 主规范。
+它**不会**改字体、样式或交叉引用——那些需要判断,留给模型 + 主规范;公式用下面的专用脚本。
+
+## 公式替换脚本
+
+`scripts/replace_math.py` 是公式规则背后的确定性工具:把 LaTeX 批量转换为原生 OMML(Pandoc),并把每条公式**拼接到纯文本原文的确切位置**——跨 run 的 token 也能处理,前后字符原样保留,自动盖上字号(小四/五号),display 公式自动排成"居中制表位 + 右对齐编号"版式。输出的 JSON 摘要里 `not_found` 与 `still_plain_text` 必须为空:
+
+```text
+python scripts/replace_math.py report.docx registry.json --in-place
+python scripts/replace_math.py --convert 'Q = \\frac{W}{T}'   # 打印单条公式的 OMML
+```
 
 ## 测试
 
@@ -184,7 +203,8 @@ python -m unittest discover -s tests -v
 │   └── three-line-table-ooxml.md               # 三线表 OOXML 实现配方
 ├── scripts/
 │   ├── audit_docx_format.py                    # 只读护栏
-│   └── normalize_docx.py                       # 安全自动修复
+│   ├── normalize_docx.py                       # 安全自动修复
+│   └── replace_math.py                         # LaTeX→OMML 公式原位替换
 ├── examples/
 │   ├── README.md
 │   ├── make_sample.py                          # 生成合规 / 不合规样例
