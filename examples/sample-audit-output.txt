@@ -1,10 +1,11 @@
 Document language: zh (CJK chars=153, Latin letters=8, OMML objects=0)
-Audit scope: Main document story only: word/document.xml. Headers, footers, footnotes, endnotes, comments, and separate embedded parts are not audited by this script. Table-cell text is checked for font size and borders only, not punctuation/heading/formula.
+Audit scope: Main document story only: word/document.xml (plus word/styles.xml for table style shading/borders). Headers, footers, footnotes, endnotes, comments, and separate embedded parts are not audited by this script. Table-cell text is checked for font size, borders, and shading only, not punctuation/heading/formula.
 FAIL ZH_PUNCT: Paragraph 3 has likely ASCII punctuation in Chinese prose: 本设计针对某流域的水利计算问题展开分析,采用多方案比较的方法进行评价.（本句为红色正文，属于不应保留的彩色字体）
 FAIL ABSTRACT_INDENT: Paragraph 2 looks like abstract/keywords but is centered or indented: 摘要 本文研究梯级水库的优化调度方法与防洪效益评估。
 FAIL H1_CENTER: Level-1 heading is centered at paragraph 1: 一、绪论
 FAIL TABLE_SIZE: Table 1 has direct font size 28; expected 五号/10.5 pt (w:sz=21; 小四/24 also accepted).
 FAIL TABLE_SIZE: Table 1 has direct font size 28; expected 五号/10.5 pt (w:sz=21; 小四/24 also accepted).
+FAIL TABLE_SHADING: Table 1 has cell/table shading; a three-line table must be all white (clear every w:shd to val=clear fill=auto).
 FAIL CITATION_BRACKETS: Body citations use full-width or non-ASCII brackets.
 FAIL CITATION_FIELDS: Body citation patterns exist, but no Word REF ref_### cross-reference fields were found.
 FAIL FORMULA_TEXT: Paragraph 4 has likely formula/quantity-symbol text that should be LaTeX-rendered OMML: 式中 N_p 为水泵台数，反映系统的装机规模。
@@ -13,7 +14,8 @@ WARN H1_GAP: Level-1 heading may need a blank visual gap before it at paragraph 
 WARN HEADING_PUNCT: Heading ends with punctuation at paragraph 8: 二、研究方法。
 WARN HEADING_NO_STYLE: Paragraph 1 looks like a heading but uses no Word heading style (won't enter the TOC): 一、绪论
 WARN HEADING_FONT: Level-1/2 heading paragraph 8 uses a Songti font '宋体'; they should be Heiti.
+WARN TABLE_RULES: Table 1 has no explicit table borders; a three-line table needs visible thick top/bottom rules (w:sz≈12) and a thin header rule (w:sz≈6) set explicitly.
 WARN COLOR: Found direct font color FF0000; verify it is intentional. Body/captions/tables/references should be black.
 WARN CAPTION_POSITION: A table caption appears below its table; table captions belong above the table.
 WARN CITATION_NO_BRACKETS: Paragraph 7 has a bare superscript number '3' with no brackets; a citation should be the whole bracketed [n], not a bare number.
-Summary: FAIL=9 WARN=7 printed=16 omitted=0
+Summary: FAIL=10 WARN=8 printed=18 omitted=0

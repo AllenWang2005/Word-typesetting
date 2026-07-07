@@ -3,6 +3,23 @@
 All notable changes to this skill are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and the project uses semantic versioning.
 
+## [1.4.0] - 2026-07-07
+
+Driven by two real-world failures: a delivered report whose three-line table kept the
+table style's blue `firstRow` header shading, and formulas that were appended to
+paragraph ends as (italic) duplicates instead of replacing the original text in place
+(`……如图 1 所示。F = 44.5 km²L = 15.4 kmL/J^(1/3) = 75.1`).
+
+### Added
+- Formula workflow: an explicit **In-Place Replacement Contract** — every OMML object replaces the original token at its exact position; the plain-text original must be gone; never append math at paragraph ends, never merge adjacent expressions (`km²L`), never leave stray fragments (`mm，Cv`); self-check by comparing the math-stripped paragraph text against the original.
+- Three-line table recipe: a **white-background section** — drop the `w:tblStyle` reference (header shading usually comes from the style's `firstRow` conditional format in styles.xml, invisible in document.xml), zero the `w:tblLook` flags, and clear every `w:shd` to `val=clear fill=auto`.
+- Auditor checks: `TABLE_SHADING` (FAIL — direct or table-style-driven shading, resolved through the style's `basedOn` chain and `tblStylePr` conditional formats in `word/styles.xml`), `TABLE_RULES` (WARN — missing visible top/bottom rules, row-to-row `insideH` borders, or a header rule not thinner than the top/bottom rules), and `MATH_DUPLICATE` (FAIL — an OMML object's text still present as plain text in the same paragraph, i.e. append-instead-of-replace).
+- Tests for all three checks; the non-compliant sample now demonstrates a shaded header cell, and the compliant sample builds a real explicit three-line table (borders + cleared shading).
+
+### Changed
+- `SKILL.md`: reading `references/three-line-table-ooxml.md` is now a required workflow step for any document with tables; the in-place replacement rule joined the formula workflow step; the Must-Fix Audit gained "any cell shading / non-white fill" and "appended/duplicated rendered math" items.
+- Auditor scope now includes `word/styles.xml` (table-style shading/borders only). Standard version → 2026-07-07.
+
 ## [1.3.0] - 2026-06-29
 
 ### Added
@@ -55,6 +72,7 @@ All notable changes to this skill are documented here. The format is based on
 ### Added
 - Initial release: the written standard (`SKILL.md` + `references/`), the `audit_docx_format.py` guardrail (punctuation, headings, fonts, captions, tables, citations, formulas; `--json` output and a FAIL/WARN summary), the `normalize_docx.py` safe auto-fixer, a non-compliant example, standard-library unit tests, and GitHub Actions CI.
 
+[1.4.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.4.0
 [1.3.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.3.0
 [1.2.2]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.2.2
 [1.2.1]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.2.1
