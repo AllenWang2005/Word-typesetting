@@ -21,9 +21,10 @@ M = f"{{{M_NS}}}"
 NS = {"w": W_NS, "m": M_NS}
 AUDIT_SCOPE = (
     "Main document story only: word/document.xml (plus word/styles.xml for table "
-    "style shading/borders). Headers, footers, footnotes, endnotes, comments, and "
-    "separate embedded parts are not audited by this script. Table-cell text is "
-    "checked for font size, borders, and shading only, not punctuation/heading/formula."
+    "style shading/borders and word/settings.xml for field updating). Headers, "
+    "footers, footnotes, endnotes, comments, and separate embedded parts are not "
+    "audited. Table-cell text is checked for font size, borders, shading, and "
+    "plain-text formulas (WARN), not punctuation/headings."
 )
 
 CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
@@ -1086,6 +1087,154 @@ def audit_equation_numbers(
             )
 
 
+def audit_table_formula_text(
+    root: ET.Element,
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """WARN about plain-text formulas/symbols inside table cells.
+
+    Table-cell paragraphs are excluded from the strict body formula check to
+    avoid numeric false positives, but visible LaTeX, `X_y` subscripts, and
+    equations in cells are high-confidence signals and are reported here.
+    """
+    for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
+        for paragraph in table.findall(".//w:p", NS):
+            text = paragraph_text(paragraph).strip()
+            if not text or has_omml(paragraph):
+                continue
+            cleaned = strip_protected(text)
+            if VISIBLE_LATEX_RE.search(cleaned) or TEXT_SUBSCRIPT_RE.search(cleaned) or TEXT_EQUATION_RE.search(cleaned):
+                add_issue(
+                    issues,
+                    "WARN",
+                    "FORMULA_TEXT_TABLE",
+                    f"Table {table_index} has a cell with likely plain-text formula/symbol content "
+                    f"that should be OMML (at table size 五号): {text[:60]}",
+                    counts,
+                )
+                break
+
+
+def audit_equation_number_tabs(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """WARN when a numbered display equation has no right tab stop.
+
+    Without a right tab, the number cannot be right-aligned. (A centered
+    paragraph is already flagged by EQUATION_NUMBER_CENTER.)
+    """
+    for index, paragraph in enumerate(paragraphs, start=1):
+        if not has_omml(paragraph):
+            continue
+        text = paragraph_text(paragraph)
+        if not EQUATION_NUMBER_RE.search(text) or paragraph_alignment(paragraph) == "center":
+            continue
+        tabs = paragraph.findall("w:pPr/w:tabs/w:tab", NS)
+        if not any(w_attr(tab, "val") == "right" for tab in tabs):
+            add_issue(
+                issues,
+                "WARN",
+                "EQUATION_NUMBER_TABS",
+                f"Paragraph {index} numbers a display equation but has no right tab stop; use a "
+                "left-aligned paragraph with a center tab (equation) and a right tab (number): "
+                f"{text.strip()[:50]}",
+                counts,
+            )
+
+
+def audit_fields_update(
+    document_xml: str,
+    settings_xml: Optional[str],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """WARN when the document has fields but Word is not told to refresh them on open.
+
+    TOC page numbers and REF cross-references are field results frozen at edit
+    time; scripted edits do not recalculate them. Setting w:updateFields in
+    word/settings.xml makes MS Word (the canonical renderer) refresh every
+    field when the document is opened.
+    """
+    has_fields = "REF ref_" in document_xml or " TOC " in document_xml or "instrText" in document_xml
+    if not has_fields:
+        return
+    if settings_xml is None or "updateFields" not in settings_xml:
+        add_issue(
+            issues,
+            "WARN",
+            "FIELDS_UPDATE",
+            "The document contains fields (TOC/REF) but word/settings.xml has no w:updateFields; "
+            "field results may be stale. Run normalize_docx.py --update-fields so Word refreshes "
+            "them on open.",
+            counts,
+        )
+
+
+def audit_firstline_indent_unit(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """WARN when first-line indents use fixed twips instead of characters.
+
+    The standard's 首行缩进 2 字符 must scale with the font, i.e.
+    w:firstLineChars="200". A bare w:firstLine (twips) looks right at one font
+    size and wrong at another. Word writes both together; only a lone
+    w:firstLine is flagged.
+    """
+    for index, paragraph in enumerate(paragraphs, start=1):
+        ind = paragraph.find("w:pPr/w:ind", NS)
+        if ind is None:
+            continue
+        if w_attr(ind, "firstLine") not in (None, "0") and w_attr(ind, "firstLineChars") is None:
+            add_issue(
+                issues,
+                "WARN",
+                "FIRSTLINE_FIXED",
+                f"Paragraph {index} indents its first line in fixed twips (w:firstLine) without "
+                "w:firstLineChars; Chinese first-line indents should be character-based (2 字符 = "
+                "firstLineChars=\"200\") so they scale with the font size.",
+                counts,
+                limit=3,
+            )
+
+
+def audit_package_integrity(docx_path: Path, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:
+    """FAIL when the DOCX package itself is damaged or missing required parts.
+
+    A document that triggers Word's repair prompt is a worse failure than any
+    formatting issue, so this is checked first.
+    """
+    required = ("[Content_Types].xml", "word/document.xml", "word/_rels/document.xml.rels")
+    try:
+        with zipfile.ZipFile(docx_path) as archive:
+            bad_member = archive.testzip()
+            if bad_member is not None:
+                add_issue(issues, "FAIL", "PACKAGE_INTEGRITY", f"Corrupt zip member: {bad_member}", counts)
+                return
+            names = set(archive.namelist())
+            for name in required:
+                if name not in names:
+                    add_issue(
+                        issues,
+                        "FAIL",
+                        "PACKAGE_INTEGRITY",
+                        f"Missing required package part {name}; Word may refuse or repair the file.",
+                        counts,
+                    )
+            rels = "word/_rels/document.xml.rels"
+            if rels in names:
+                try:
+                    ET.fromstring(archive.read(rels))
+                except ET.ParseError:
+                    add_issue(issues, "FAIL", "PACKAGE_INTEGRITY", f"{rels} is not well-formed XML.", counts)
+    except (zipfile.BadZipFile, OSError) as exc:
+        add_issue(issues, "FAIL", "PACKAGE_INTEGRITY", f"Cannot read package: {exc}", counts)
+
+
 def load_part(docx_path: Path, name: str) -> Optional[str]:
     """Read an optional part (e.g. word/styles.xml) from the DOCX; None when absent."""
     try:
@@ -1170,6 +1319,7 @@ def main() -> int:
             styles_root = ET.fromstring(styles_xml)
         except ET.ParseError:
             styles_root = None
+    settings_xml = load_part(args.docx, "word/settings.xml")
 
     all_paragraphs = root.findall(".//w:body//w:p", NS)
     # Paragraph-based checks audit the main story only; table-cell paragraphs are excluded because
@@ -1184,6 +1334,7 @@ def main() -> int:
 
     issues: list[Issue] = []
     issue_counts: dict[tuple[str, str], int] = {}
+    audit_package_integrity(args.docx, issues, issue_counts)
     audit_punctuation(paragraphs[:bib_index], language, issues, issue_counts)
     audit_abstract_keywords(paragraphs, issues, issue_counts)
     audit_headings(paragraphs, issues, issue_counts)
@@ -1205,8 +1356,12 @@ def main() -> int:
     audit_manual_italic_math(paragraphs[:bib_index], issues, issue_counts)
     audit_formula_digit_italics(root, issues, issue_counts)
     audit_formula_multiletter_italics(root, issues, issue_counts)
+    audit_table_formula_text(root, issues, issue_counts)
     audit_number_unit_spacing(paragraphs[:bib_index], issues, issue_counts)
     audit_equation_numbers(paragraphs[:bib_index], issues, issue_counts)
+    audit_equation_number_tabs(paragraphs[:bib_index], issues, issue_counts)
+    audit_fields_update(document_xml, settings_xml, issues, issue_counts)
+    audit_firstline_indent_unit(paragraphs[:bib_index], issues, issue_counts)
 
     omml_count = len(root.findall(".//m:oMath", NS)) + len(root.findall(".//m:oMathPara", NS))
     summary, omitted = summarize_issues(issues, issue_counts)
@@ -1234,7 +1389,7 @@ def main() -> int:
     print(f"Document language: {language} (CJK chars={cjk_count}, Latin letters={latin_count}, OMML objects={omml_count})")
     print(f"Audit scope: {AUDIT_SCOPE}")
     if not issues:
-        print("PASS: no machine-detected guardrail issues.")
+        print("PASS: no machine-detected guardrail issues (within audit scope; a visual check in MS Word is still required).")
         print("Summary: FAIL=0 WARN=0 printed=0 omitted=0")
         return 0
 

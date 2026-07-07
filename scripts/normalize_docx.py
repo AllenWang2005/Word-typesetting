@@ -3,7 +3,9 @@
 
 This is the conservative companion to ``audit_docx_format.py``. It only performs
 fixes that are unambiguous and low risk, working on the raw ``word/document.xml``
-text so every other byte of the package is preserved:
+text so every other byte of the package is preserved.
+
+Default fixes (always applied):
 
 1. Full-width / lenticular citation brackets around numbers become ASCII:
    ``［1］`` / ``【1,2】`` -> ``[1]`` / ``[1,2]``.
@@ -12,14 +14,33 @@ text so every other byte of the package is preserved:
    citation brackets, and any punctuation next to a tag boundary are left alone,
    because the lookbehind/lookahead require a CJK character on both sides.
 
-It does NOT touch fonts, styles, formulas, or citations cross-references — those
-need judgement and belong to the model + the main standard. By default it writes
-a new ``*.normalized.docx`` file and leaves the input untouched.
+Opt-in fixes:
+
+``--units``          insert the half-width space between a number and its unit
+                     (``20km`` -> ``20 km``) and remove the space before ``%`` /
+                     ``°`` / ``℃`` (``50 %`` -> ``50%``), inside w:t text only.
+``--tables``         white three-line hygiene: clear every ``w:shd`` inside
+                     tables to ``clear/auto``, zero the ``w:tblLook``
+                     conditional-formatting flags, and mark the first row of
+                     every multi-row table to repeat across pages
+                     (``w:tblHeader``). Borders are NOT touched — set them per
+                     ``references/three-line-table-ooxml.md``.
+``--update-fields``  set ``w:updateFields`` in word/settings.xml so MS Word
+                     (the canonical renderer) refreshes TOC/REF fields on open.
+``--all``            all of the above.
+
+It does NOT touch fonts, styles, formulas, or citation cross-references — those
+need judgement and belong to the model + the main standard (use
+``scripts/replace_math.py`` for formulas). By default it writes a new
+``*.normalized.docx`` file and leaves the input untouched.
+
+Known limitation: the punctuation fix works on raw XML, so a CJK character and
+its punctuation split across two runs are not matched.
 
 Usage:
     python scripts/normalize_docx.py report.docx                 # -> report.normalized.docx
-    python scripts/normalize_docx.py report.docx -o fixed.docx
-    python scripts/normalize_docx.py report.docx --in-place
+    python scripts/normalize_docx.py report.docx --all -o fixed.docx
+    python scripts/normalize_docx.py report.docx --tables --update-fields --in-place
 """
 
 from __future__ import annotations
@@ -34,8 +55,24 @@ CJK = r"㐀-䶿一-鿿"
 FULLWIDTH = {",": "，", ".": "。", ";": "；", ":": "：", "?": "？", "!": "！"}
 BRACKET_NUMBER = r"\d(?:[\d,，\-–—\s]*\d)?"
 
+WT_RE = re.compile(r"(<w:t(?:\s[^>]*)?>)([^<]*)(</w:t>)")
+TBL_RE = re.compile(r"<w:tbl>.*?</w:tbl>", re.S)
+SHD_RE = re.compile(r"<w:shd\b[^>]*/>")
+TBLLOOK_RE = re.compile(r"<w:tblLook\b[^>]*/>")
+TR_OPEN_RE = re.compile(r"<w:tr(?:\s[^>]*)?>")
+UNIT_GLUE_RE = re.compile(r"(\d)(km|mm|cm|kg|kN|kPa|MPa|kW|MW|kV|Hz|min)(?![A-Za-z])")
+UNIT_GLUE_M_RE = re.compile(r"(\d)(m)(?=[²³/])")
+SPACE_BEFORE_UNIT_RE = re.compile(r"(\d)[  　\t]+(%|℃|°C|°(?![CF]))")
+
+CLEAR_SHD = '<w:shd w:val="clear" w:color="auto" w:fill="auto"/>'
+ZERO_TBLLOOK = (
+    '<w:tblLook w:val="0000" w:firstRow="0" w:lastRow="0" w:firstColumn="0" '
+    'w:lastColumn="0" w:noHBand="1" w:noVBand="1"/>'
+)
+
 
 def normalize_document_xml(xml: str) -> tuple[str, dict[str, int]]:
+    """The two always-on fixes: citation brackets and CJK punctuation."""
     counts = {"citation_brackets": 0, "cjk_punctuation": 0}
 
     def repl_bracket(match: "re.Match[str]") -> str:
@@ -53,15 +90,99 @@ def normalize_document_xml(xml: str) -> tuple[str, dict[str, int]]:
     return xml, counts
 
 
-def normalize_docx(src: Path, dst: Path) -> dict[str, int]:
+def fix_unit_spacing(xml: str) -> tuple[str, int]:
+    """Fix number-unit spacing inside w:t text nodes only."""
+    fixed = 0
+
+    def process(match: "re.Match[str]") -> str:
+        nonlocal fixed
+        text = match.group(2)
+        text, n1 = UNIT_GLUE_RE.subn(r"\1 \2", text)
+        text, n2 = UNIT_GLUE_M_RE.subn(r"\1 \2", text)
+        text, n3 = SPACE_BEFORE_UNIT_RE.subn(r"\1\2", text)
+        fixed += n1 + n2 + n3
+        return match.group(1) + text + match.group(3)
+
+    return WT_RE.sub(process, xml), fixed
+
+
+def fix_table_hygiene(xml: str) -> tuple[str, dict[str, int]]:
+    """Clear in-table shading, zero tblLook flags, repeat the header row."""
+    counts = {"shading_cleared": 0, "tbllook_zeroed": 0, "header_repeat_added": 0}
+
+    def process_table(match: "re.Match[str]") -> str:
+        block = match.group(0)
+
+        def clear_shd(m: "re.Match[str]") -> str:
+            if m.group(0) == CLEAR_SHD:
+                return m.group(0)
+            counts["shading_cleared"] += 1
+            return CLEAR_SHD
+
+        def zero_look(m: "re.Match[str]") -> str:
+            if m.group(0) == ZERO_TBLLOOK:
+                return m.group(0)
+            counts["tbllook_zeroed"] += 1
+            return ZERO_TBLLOOK
+
+        block = SHD_RE.sub(clear_shd, block)
+        block = TBLLOOK_RE.sub(zero_look, block)
+        rows = TR_OPEN_RE.findall(block)
+        if len(rows) >= 2:
+            first_tr = TR_OPEN_RE.search(block)
+            first_tr_end = block.find("</w:tr>", first_tr.end())
+            first_row = block[first_tr.end() : first_tr_end]
+            if "<w:tblHeader" not in first_row:
+                if first_row.lstrip().startswith("<w:trPr>"):
+                    insert_at = block.find("<w:trPr>", first_tr.end()) + len("<w:trPr>")
+                    block = block[:insert_at] + "<w:tblHeader/>" + block[insert_at:]
+                else:
+                    block = (
+                        block[: first_tr.end()]
+                        + "<w:trPr><w:tblHeader/></w:trPr>"
+                        + block[first_tr.end() :]
+                    )
+                counts["header_repeat_added"] += 1
+        return block
+
+    return TBL_RE.sub(process_table, xml), counts
+
+
+def fix_settings_update_fields(settings_xml: str) -> tuple[str, bool]:
+    """Ensure w:settings contains w:updateFields so Word refreshes fields on open."""
+    if "updateFields" in settings_xml:
+        return settings_xml, False
+    match = re.search(r"<w:settings\b[^>]*>", settings_xml)
+    if match is None:
+        return settings_xml, False
+    insert_at = match.end()
+    return (
+        settings_xml[:insert_at] + '<w:updateFields w:val="true"/>' + settings_xml[insert_at:],
+        True,
+    )
+
+
+def normalize_docx(
+    src: Path, dst: Path, units: bool = False, tables: bool = False, update_fields: bool = False
+) -> dict[str, int]:
     with zipfile.ZipFile(src) as archive:
         names = archive.namelist()
         if "word/document.xml" not in names:
             raise ValueError("Input does not contain word/document.xml; not a normal DOCX.")
         data = {name: archive.read(name) for name in names}
 
-    new_xml, counts = normalize_document_xml(data["word/document.xml"].decode("utf-8"))
-    data["word/document.xml"] = new_xml.encode("utf-8")
+    xml, counts = normalize_document_xml(data["word/document.xml"].decode("utf-8"))
+    if units:
+        xml, fixed = fix_unit_spacing(xml)
+        counts["unit_spacing"] = fixed
+    if tables:
+        xml, table_counts = fix_table_hygiene(xml)
+        counts.update(table_counts)
+    if update_fields and "word/settings.xml" in data:
+        settings, changed = fix_settings_update_fields(data["word/settings.xml"].decode("utf-8"))
+        data["word/settings.xml"] = settings.encode("utf-8")
+        counts["update_fields_set"] = int(changed)
+    data["word/document.xml"] = xml.encode("utf-8")
 
     with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as archive:
         for name in names:
@@ -74,11 +195,19 @@ def main() -> int:
     parser.add_argument("docx", type=Path, help="Path to the DOCX file to normalize.")
     parser.add_argument("-o", "--output", type=Path, help="Output path (default: <name>.normalized.docx).")
     parser.add_argument("--in-place", action="store_true", help="Overwrite the input file.")
+    parser.add_argument("--units", action="store_true", help="Fix number-unit spacing (20km -> 20 km; 50 %% -> 50%%).")
+    parser.add_argument("--tables", action="store_true", help="Clear in-table shading, zero tblLook, repeat header rows.")
+    parser.add_argument("--update-fields", action="store_true", help="Set w:updateFields so Word refreshes TOC/REF on open.")
+    parser.add_argument("--all", action="store_true", help="Enable every opt-in fix.")
     args = parser.parse_args()
 
     if not args.docx.exists():
         print(f"ERROR: file not found: {args.docx}", file=sys.stderr)
         return 2
+
+    units = args.units or args.all
+    tables = args.tables or args.all
+    update_fields = args.update_fields or args.all
 
     if args.in_place:
         destination = args.docx
@@ -90,17 +219,17 @@ def main() -> int:
     try:
         if args.in_place:
             temp = args.docx.with_suffix(".normalize.tmp")
-            counts = normalize_docx(args.docx, temp)
+            counts = normalize_docx(args.docx, temp, units, tables, update_fields)
             temp.replace(args.docx)
         else:
-            counts = normalize_docx(args.docx, destination)
+            counts = normalize_docx(args.docx, destination, units, tables, update_fields)
     except (zipfile.BadZipFile, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
     print(f"Wrote {destination}")
-    print(f"Citation brackets normalized: {counts['citation_brackets']}")
-    print(f"CJK punctuation normalized: {counts['cjk_punctuation']}")
+    for key, value in counts.items():
+        print(f"{key}: {value}")
     return 0
 
 

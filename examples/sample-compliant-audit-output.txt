@@ -1,4 +1,4 @@
 Document language: zh (CJK chars=97, Latin letters=0, OMML objects=0)
-Audit scope: Main document story only: word/document.xml (plus word/styles.xml for table style shading/borders). Headers, footers, footnotes, endnotes, comments, and separate embedded parts are not audited by this script. Table-cell text is checked for font size, borders, and shading only, not punctuation/heading/formula.
-PASS: no machine-detected guardrail issues.
+Audit scope: Main document story only: word/document.xml (plus word/styles.xml for table style shading/borders and word/settings.xml for field updating). Headers, footers, footnotes, endnotes, comments, and separate embedded parts are not audited. Table-cell text is checked for font size, borders, shading, and plain-text formulas (WARN), not punctuation/headings.
+PASS: no machine-detected guardrail issues (within audit scope; a visual check in MS Word is still required).
 Summary: FAIL=0 WARN=0 printed=0 omitted=0

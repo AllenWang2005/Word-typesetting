@@ -3,6 +3,24 @@
 All notable changes to this skill are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and the project uses semantic versioning.
 
+## [1.5.0] - 2026-07-07
+
+Direction set by the blind-spot review: invest in executable tooling, not longer
+prose rules. **MS Word is the canonical renderer**; the audit script is the
+completion gate; PDF/page-render passes are not run unless explicitly requested.
+
+### Added
+- `scripts/replace_math.py` — the deterministic formula tool: converts a JSON registry of LaTeX formulas to native OMML (one Pandoc batch) and splices each equation **at the exact position of its plain-text original** (cross-run tokens handled, surrounding characters preserved, `w:sz`/`w:szCs` stamped, display equations laid out as left-aligned line + center tab + right-aligned number). Reports `not_found` / `still_plain_text`; namespace declarations (incl. `mc:Ignorable`) preserved verbatim. `--convert` prints the OMML of a single fragment.
+- `references/generate-from-source.md` — source-first authoring for new documents: Markdown + LaTeX compiled with `pandoc --reference-doc`, correct by construction; harvesting existing OMML formulas back to LaTeX with `pandoc old.docx -t markdown` to seed the registry.
+- Auditor checks: `FORMULA_TEXT_TABLE` (WARN — plain-text formulas/symbols inside table cells, previously a silent scope exclusion), `EQUATION_NUMBER_TABS` (WARN — numbered display equation with no right tab stop), `FIELDS_UPDATE` (WARN — TOC/REF fields present but `w:updateFields` unset, so field results may be stale), `FIRSTLINE_FIXED` (WARN — first-line indent in fixed twips instead of `firstLineChars`), and `PACKAGE_INTEGRITY` (FAIL — corrupt zip member or missing required package part, checked before everything else).
+- `normalize_docx.py` opt-in auto-fixes: `--units` (insert the number-unit space, remove the space before `%`/`°`/`℃`, inside `w:t` text only), `--tables` (clear every in-table `w:shd` to `clear/auto`, zero the `w:tblLook` flags, add `w:tblHeader` to the first row of multi-row tables), `--update-fields` (set `w:updateFields` in settings.xml so MS Word refreshes fields on open), `--all`.
+- CI installs Pandoc so the LaTeX→OMML round-trip tests run; 22 new tests (124 total).
+
+### Changed
+- The formula workflow now names `replace_math.py` as the preferred conversion mechanism; hand-editing OOXML for formulas is the fallback, not the norm.
+- `SKILL.md` records the acceptance decisions (GB norms, general documents, MS Word canonical) and replaces the render-to-PDF step with "audit gate + user spot-check in Word; no render passes unless asked".
+- The auditor's PASS line now states its scope explicitly so PASS is not misread as full compliance; scope includes `word/settings.xml`.
+
 ## [1.4.0] - 2026-07-07
 
 Driven by two real-world failures: a delivered report whose three-line table kept the
@@ -77,6 +95,7 @@ paragraph ends as (italic) duplicates instead of replacing the original text in 
 ### Added
 - Initial release: the written standard (`SKILL.md` + `references/`), the `audit_docx_format.py` guardrail (punctuation, headings, fonts, captions, tables, citations, formulas; `--json` output and a FAIL/WARN summary), the `normalize_docx.py` safe auto-fixer, a non-compliant example, standard-library unit tests, and GitHub Actions CI.
 
+[1.5.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.5.0
 [1.4.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.4.0
 [1.3.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.3.0
 [1.2.2]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.2.2

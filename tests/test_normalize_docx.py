@@ -48,5 +48,80 @@ class NormalizeTextTests(unittest.TestCase):
         self.assertEqual(counts["cjk_punctuation"], 0)
 
 
+class UnitSpacingFixTests(unittest.TestCase):
+    def test_glued_unit_gets_space(self):
+        xml = "<w:t>距离为20km，流量216m³/s。</w:t>"
+        out, fixed = norm.fix_unit_spacing(xml)
+        self.assertIn("20 km", out)
+        self.assertIn("216 m³/s", out)
+        self.assertEqual(fixed, 2)
+
+    def test_space_before_percent_removed(self):
+        out, fixed = norm.fix_unit_spacing("<w:t>频率为 0.1 %，水温 25 ℃。</w:t>")
+        self.assertIn("0.1%", out)
+        self.assertIn("25℃", out)
+        self.assertEqual(fixed, 2)
+
+    def test_text_outside_wt_untouched(self):
+        # Attribute values and tags must never be rewritten.
+        xml = '<w:pict o:title="20km"/><w:t>正文20km</w:t>'
+        out, _ = norm.fix_unit_spacing(xml)
+        self.assertIn('o:title="20km"', out)
+        self.assertIn("正文20 km", out)
+
+    def test_already_spaced_untouched(self):
+        out, fixed = norm.fix_unit_spacing("<w:t>距离为 20 km。</w:t>")
+        self.assertEqual(fixed, 0)
+
+
+class TableHygieneFixTests(unittest.TestCase):
+    def test_shading_cleared_and_tbllook_zeroed(self):
+        xml = (
+            '<w:tbl><w:tblPr><w:tblLook w:val="04A0" w:firstRow="1"/></w:tblPr>'
+            '<w:tr><w:tc><w:tcPr><w:shd w:val="clear" w:fill="D9E2F3"/></w:tcPr>'
+            "<w:p/></w:tc></w:tr></w:tbl>"
+        )
+        out, counts = norm.fix_table_hygiene(xml)
+        self.assertNotIn("D9E2F3", out)
+        self.assertIn('w:fill="auto"', out)
+        self.assertIn('w:firstRow="0"', out)
+        self.assertEqual(counts["shading_cleared"], 1)
+        self.assertEqual(counts["tbllook_zeroed"], 1)
+
+    def test_header_repeat_added_to_multirow_table(self):
+        xml = "<w:tbl><w:tr><w:tc><w:p/></w:tc></w:tr><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>"
+        out, counts = norm.fix_table_hygiene(xml)
+        self.assertEqual(counts["header_repeat_added"], 1)
+        first_row_end = out.find("</w:tr>")
+        self.assertIn("<w:tblHeader/>", out[:first_row_end])
+
+    def test_single_row_table_untouched(self):
+        xml = "<w:tbl><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>"
+        out, counts = norm.fix_table_hygiene(xml)
+        self.assertNotIn("tblHeader", out)
+        self.assertEqual(counts["header_repeat_added"], 0)
+
+    def test_shading_outside_tables_untouched(self):
+        xml = '<w:p><w:pPr><w:shd w:val="clear" w:fill="FFFF00"/></w:pPr></w:p>'
+        out, counts = norm.fix_table_hygiene(xml)
+        self.assertIn("FFFF00", out)
+        self.assertEqual(counts["shading_cleared"], 0)
+
+
+class UpdateFieldsFixTests(unittest.TestCase):
+    def test_updatefields_inserted(self):
+        settings = '<w:settings xmlns:w="ns"><w:zoom/></w:settings>'
+        out, changed = norm.fix_settings_update_fields(settings)
+        self.assertTrue(changed)
+        self.assertIn('<w:updateFields w:val="true"/>', out)
+        self.assertLess(out.find("updateFields"), out.find("w:zoom"))
+
+    def test_existing_updatefields_untouched(self):
+        settings = '<w:settings><w:updateFields w:val="true"/></w:settings>'
+        out, changed = norm.fix_settings_update_fields(settings)
+        self.assertFalse(changed)
+        self.assertEqual(out, settings)
+
+
 if __name__ == "__main__":
     unittest.main()

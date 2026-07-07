@@ -153,24 +153,46 @@ with a `FAIL/WARN` summary, and notes any per-code truncation. Checks include:
 | `MANUAL_ITALIC_MATH` | FAIL | An italicized plain-text pseudo-formula (e.g. italic `F = 44.5 km²`) instead of OMML |
 | `NUMBER_UNIT_SPACING` | WARN | `20km` glued (needs `20 km`) or a space before `%`/`°`/`℃` |
 | `EQUATION_NUMBER_CENTER` | WARN | A numbered display formula is centered (the number should be right-aligned) |
+| `EQUATION_NUMBER_TABS` | WARN | A numbered display formula has no right tab stop for its number |
+| `FORMULA_TEXT_TABLE` | WARN | Plain-text formula/symbol inside a table cell that should be OMML |
+| `FIELDS_UPDATE` | WARN | TOC/REF fields present but `w:updateFields` unset (results may be stale) |
+| `FIRSTLINE_FIXED` | WARN | First-line indent in fixed twips instead of characters (`firstLineChars`) |
+| `PACKAGE_INTEGRITY` | FAIL | Corrupt zip member or missing required package part |
 
 It is intentionally **domain-neutral** — no hard-coded field-specific symbol list.
 
-**Audit scope:** the script inspects the main document story in `word/document.xml`, plus `word/styles.xml` for table-style shading and borders.
+**Audit scope:** the script inspects the main document story in `word/document.xml`, plus `word/styles.xml` (table-style shading/borders) and `word/settings.xml` (field updating).
 It does not audit headers, footers, footnotes, endnotes, comments, or embedded parts —
 verify those visually or with a deeper OOXML pass when they matter. Table-cell text is
-checked for font size and borders only, not punctuation/heading/formula (this avoids
-false positives from numbers and short fragments in cells).
+checked for font size, borders, shading, and plain-text formulas (WARN level), not
+punctuation/headings (this avoids false positives from numbers and short fragments in cells).
 
 ## The auto-fix script
 
-`scripts/normalize_docx.py` mechanically fixes the two safest issues — full-width
-citation brackets (`［1］` → `[1]`) and ASCII sentence punctuation between CJK
-characters (`中文,中文` → `中文，中文`) — preserving every other byte of the package:
+`scripts/normalize_docx.py` mechanically fixes the safe issues, preserving every
+other byte of the package. Always on: full-width citation brackets (`［1］` → `[1]`)
+and ASCII sentence punctuation between CJK characters (`中文,中文` → `中文，中文`).
+Opt-in: `--units` (`20km` → `20 km`, `50 %` → `50%`), `--tables` (clear in-table
+shading, zero `w:tblLook`, repeat header rows across pages), `--update-fields`
+(MS Word refreshes TOC/REF fields on open), `--all`:
 
 ```text
 python scripts/normalize_docx.py report.docx -o report.fixed.docx
-python scripts/normalize_docx.py report.docx --in-place
+python scripts/normalize_docx.py report.docx --all --in-place
+```
+
+## The formula replacement script
+
+`scripts/replace_math.py` is the deterministic tool behind the formula rules: it
+converts LaTeX to native OMML (Pandoc, one batch) and splices each equation at the
+exact position of its plain-text original — cross-run tokens handled, surrounding
+characters preserved, font size stamped (`小四`/`五号`), display equations laid out
+with a center tab and a right-aligned number. Its JSON summary reports `not_found`
+and `still_plain_text`; both must be empty.
+
+```text
+python scripts/replace_math.py report.docx registry.json --in-place
+python scripts/replace_math.py --convert 'Q = \\frac{W}{T}'   # print OMML for one formula
 ```
 
 It deliberately does **not** touch fonts, styles, formulas, or cross-references; those
@@ -204,6 +226,7 @@ CI runs `py_compile` plus the test suite on Python 3.9 and 3.12 on every push
 │   ├── citation-crossrefs-ooxml.md             # in-text REF cross-reference OOXML
 │   └── three-line-table-ooxml.md               # three-line table OOXML recipe
 ├── scripts/
+│   ├── replace_math.py                         # LaTeX→OMML in-place formula replacement
 │   ├── audit_docx_format.py                    # read-only guardrail
 │   └── normalize_docx.py                       # safe auto-fixer
 ├── examples/
@@ -213,7 +236,8 @@ CI runs `py_compile` plus the test suite on Python 3.9 and 3.12 on every push
 │   └── sample-compliant-audit-output.txt
 └── tests/
     ├── test_audit_docx_format.py
-    └── test_normalize_docx.py
+    ├── test_normalize_docx.py
+    └── test_replace_math.py
 ```
 
 See [`CHANGELOG.md`](CHANGELOG.md) for the version history.

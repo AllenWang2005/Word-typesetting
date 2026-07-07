@@ -36,6 +36,26 @@ aud = _load_audit_module()
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 
+
+CONTENT_TYPES = (
+    '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+    '<Default Extension="xml" ContentType="application/xml"/>'
+    '<Override PartName="/word/document.xml" '
+    'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+)
+DOCUMENT_RELS = (
+    '<?xml version="1.0"?>'
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'
+)
+
+
+def write_minimal_docx(path: str, document: str) -> None:
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("[Content_Types].xml", CONTENT_TYPES)
+        archive.writestr("word/_rels/document.xml.rels", DOCUMENT_RELS)
+        archive.writestr("word/document.xml", document)
+
+
 def make_p(text: str, jc: Optional[str] = None, first_line: Optional[str] = None, style: Optional[str] = None) -> ET.Element:
     ppr = ""
     if style:
@@ -82,8 +102,7 @@ def run_main_json(body_inner: str) -> dict:
     with tempfile.TemporaryDirectory() as folder:
         path = os.path.join(folder, "doc.docx")
         document = f'<w:document xmlns:w="{W}"><w:body>{body_inner}</w:body></w:document>'
-        with zipfile.ZipFile(path, "w") as archive:
-            archive.writestr("word/document.xml", document)
+        write_minimal_docx(path, document)
         saved_argv = sys.argv
         sys.argv = ["audit", path, "--json", "--language", "zh"]
         buffer = io.StringIO()
@@ -543,8 +562,7 @@ class JsonOutputTests(unittest.TestCase):
                 f'并且不包含任何明显的排版问题，因此机器审计的结果应当顺利通过检查。</w:t></w:r></w:p>'
                 f'</w:body></w:document>'
             )
-            with zipfile.ZipFile(path, "w") as archive:
-                archive.writestr("word/document.xml", document)
+            write_minimal_docx(path, document)
             saved_argv = sys.argv
             sys.argv = ["audit", path, "--json"]
             buffer = io.StringIO()
@@ -773,6 +791,111 @@ class TableHeaderRepeatTests(unittest.TestCase):
         issues = []
         aud.audit_table_header_repeat(self._table(header=False, rows=1), issues)
         self.assertNotIn("TABLE_HEADER_REPEAT", codes(issues))
+
+
+class TableFormulaTextTests(unittest.TestCase):
+    def _table_with_cell(self, cell_text: str) -> ET.Element:
+        return make_doc(
+            f'<w:tbl><w:tr><w:tc><w:p><w:r><w:t xml:space="preserve">{cell_text}</w:t></w:r></w:p>'
+            f"</w:tc></w:tr></w:tbl>"
+        )
+
+    def test_equation_in_cell_flagged(self):
+        issues = []
+        aud.audit_table_formula_text(self._table_with_cell("Q_p=W/T"), issues)
+        self.assertIn("FORMULA_TEXT_TABLE", codes(issues))
+
+    def test_numeric_cell_not_flagged(self):
+        issues = []
+        aud.audit_table_formula_text(self._table_with_cell("216.5"), issues)
+        self.assertNotIn("FORMULA_TEXT_TABLE", codes(issues))
+
+    def test_plain_label_cell_not_flagged(self):
+        issues = []
+        aud.audit_table_formula_text(self._table_with_cell("方案比较"), issues)
+        self.assertNotIn("FORMULA_TEXT_TABLE", codes(issues))
+
+
+class EquationNumberTabsTests(unittest.TestCase):
+    MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+
+    def _eq(self, tabs: bool) -> ET.Element:
+        tabs_xml = (
+            '<w:tabs><w:tab w:val="center" w:pos="4536"/><w:tab w:val="right" w:pos="9072"/></w:tabs>'
+            if tabs
+            else ""
+        )
+        return ET.fromstring(
+            f'<w:p xmlns:w="{W}" xmlns:m="{self.MATH_NS}"><w:pPr>{tabs_xml}</w:pPr>'
+            f"<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath><w:r><w:t>(3-3)</w:t></w:r></w:p>"
+        )
+
+    def test_numbered_equation_without_right_tab_flagged(self):
+        issues = []
+        aud.audit_equation_number_tabs([self._eq(tabs=False)], issues)
+        self.assertIn("EQUATION_NUMBER_TABS", codes(issues))
+
+    def test_numbered_equation_with_right_tab_ok(self):
+        issues = []
+        aud.audit_equation_number_tabs([self._eq(tabs=True)], issues)
+        self.assertNotIn("EQUATION_NUMBER_TABS", codes(issues))
+
+
+class FieldsUpdateTests(unittest.TestCase):
+    def test_fields_without_updatefields_flagged(self):
+        issues = []
+        aud.audit_fields_update('<w:instrText> REF ref_001 \\h </w:instrText>', None, issues)
+        self.assertIn("FIELDS_UPDATE", codes(issues))
+
+    def test_fields_with_updatefields_ok(self):
+        issues = []
+        settings = '<w:settings><w:updateFields w:val="true"/></w:settings>'
+        aud.audit_fields_update('<w:instrText> REF ref_001 \\h </w:instrText>', settings, issues)
+        self.assertNotIn("FIELDS_UPDATE", codes(issues))
+
+    def test_document_without_fields_ok(self):
+        issues = []
+        aud.audit_fields_update("<w:document><w:body/></w:document>", None, issues)
+        self.assertNotIn("FIELDS_UPDATE", codes(issues))
+
+
+class FirstlineIndentUnitTests(unittest.TestCase):
+    def _p(self, ind: str) -> ET.Element:
+        return ET.fromstring(
+            f'<w:p xmlns:w="{W}"><w:pPr><w:ind {ind}/></w:pPr>'
+            f"<w:r><w:t>正文段落。</w:t></w:r></w:p>"
+        )
+
+    def test_fixed_twip_indent_flagged(self):
+        issues = []
+        aud.audit_firstline_indent_unit([self._p('w:firstLine="480"')], issues)
+        self.assertIn("FIRSTLINE_FIXED", codes(issues))
+
+    def test_char_based_indent_ok(self):
+        issues = []
+        aud.audit_firstline_indent_unit(
+            [self._p('w:firstLine="480" w:firstLineChars="200"')], issues
+        )
+        self.assertNotIn("FIRSTLINE_FIXED", codes(issues))
+
+
+class PackageIntegrityTests(unittest.TestCase):
+    def test_missing_required_parts_flagged(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "bare.docx")
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("word/document.xml", "<w:document/>")
+            issues = []
+            aud.audit_package_integrity(pathlib.Path(path), issues)
+        self.assertIn("PACKAGE_INTEGRITY", codes(issues))
+
+    def test_complete_package_ok(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "ok.docx")
+            write_minimal_docx(path, f'<w:document xmlns:w="{W}"><w:body/></w:document>')
+            issues = []
+            aud.audit_package_integrity(pathlib.Path(path), issues)
+        self.assertNotIn("PACKAGE_INTEGRITY", codes(issues))
 
 
 class SummaryTests(unittest.TestCase):

@@ -1,5 +1,5 @@
 Document language: zh (CJK chars=153, Latin letters=11, OMML objects=0)
-Audit scope: Main document story only: word/document.xml (plus word/styles.xml for table style shading/borders). Headers, footers, footnotes, endnotes, comments, and separate embedded parts are not audited by this script. Table-cell text is checked for font size, borders, and shading only, not punctuation/heading/formula.
+Audit scope: Main document story only: word/document.xml (plus word/styles.xml for table style shading/borders and word/settings.xml for field updating). Headers, footers, footnotes, endnotes, comments, and separate embedded parts are not audited. Table-cell text is checked for font size, borders, shading, and plain-text formulas (WARN), not punctuation/headings.
 FAIL ZH_PUNCT: Paragraph 3 has likely ASCII punctuation in Chinese prose: 本设计针对某流域的水利计算问题展开分析,采用多方案比较的方法进行评价.（本句为红色正文，属于不应保留的彩色字体）
 FAIL ABSTRACT_INDENT: Paragraph 2 looks like abstract/keywords but is centered or indented: 摘要 本文研究梯级水库的优化调度方法与防洪效益评估。
 FAIL H1_CENTER: Level-1 heading is centered at paragraph 1: 一、绪论
@@ -21,4 +21,5 @@ WARN COLOR: Found direct font color FF0000; verify it is intentional. Body/capti
 WARN CAPTION_POSITION: A table caption appears below its table; table captions belong above the table.
 WARN CAPTION_ALIGN: Caption paragraph 10 is not centered: 表 1-1 方案比较结果
 WARN CITATION_NO_BRACKETS: Paragraph 8 has a bare superscript number '3' with no brackets; a citation should be the whole bracketed [n], not a bare number.
-Summary: FAIL=12 WARN=9 printed=21 omitted=0
+WARN FIRSTLINE_FIXED: Paragraph 2 indents its first line in fixed twips (w:firstLine) without w:firstLineChars; Chinese first-line indents should be character-based (2 字符 = firstLineChars="200") so they scale with the font size.
+Summary: FAIL=12 WARN=10 printed=22 omitted=0

@@ -9,7 +9,9 @@ description: Apply Allen's formal Word report formatting standard. Use when crea
 
 Use this skill to format formal Chinese Word reports consistently with Allen's preferred standard. It complements the general DOCX/document skill: use the document tooling for implementation and rendering, and use this skill for the required typography, formula, table, figure, reference/citation, and appendix-code rules.
 
-**Standard version: 2026-07-07.** Detailed rules live in `references/`:
+**Standard version: 2026-07-07.** Acceptance decisions: the standard follows GB norms (GB 3100/3101/3102, GB/T 15835, GB/T 7714) and applies to general formal documents; **MS Word is the canonical renderer** — when renderers disagree, what Word shows is what counts. The audit script is the primary completion gate; do **not** run PDF/page-image render passes unless the user explicitly asks (token cost) — a quick visual open in Word by the user replaces them.
+
+Detailed rules live in `references/`:
 
 - `references/formatting-standard.md` — main formatting checklist (typography, language/punctuation, headings, tables, formulas, figures, numbers/units, citations, lists/footnotes, appendix code).
 - `references/document-structure-and-page-setup.md` — document structure and order, page setup, headers/footers, page numbering and sections, TOC, font-size hierarchy, multilevel numbering, widow/orphan control.
@@ -17,6 +19,7 @@ Use this skill to format formal Chinese Word reports consistently with Allen's p
 - `references/reference-style-gbt7714.md` — GB/T 7714 bibliography entry format.
 - `references/citation-crossrefs-ooxml.md` — in-text superscript citations + Word REF cross-reference OOXML.
 - `references/three-line-table-ooxml.md` — OOXML recipe for the three-line table (which borders to set, line widths, avoiding gridded styles).
+- `references/generate-from-source.md` — source-first authoring for new documents (Markdown + LaTeX compiled with Pandoc; harvesting existing formulas back to LaTeX).
 
 ## Required Workflow
 
@@ -25,12 +28,12 @@ Use this skill to format formal Chinese Word reports consistently with Allen's p
 3. Apply the standard unless the user, school template, or provided rubric explicitly overrides it.
 4. Preserve existing document content and structure during edit tasks; make only the local formatting changes needed.
 5. For any document containing formulas, variables, quantity symbols, subscripts/superscripts, units, or math-like expressions, read `references/latex-omml-formula-workflow.md` and run a formula discovery pass before styling. This includes bare one-letter quantity symbols in definition/explanation prose, such as `式中 Q 为流量，N 为出力`.
-6. Write formulas, inline variables, math objects, and quantity symbols as LaTeX first, then render them into native Word OMML equations. Every conversion is an **in-place replacement**: the OMML object goes exactly where the original token was and the original plain text is removed; never append rendered math at the end of a paragraph or merge adjacent expressions. Do not satisfy this standard by manually italicizing normal text.
+6. Write formulas, inline variables, math objects, and quantity symbols as LaTeX first, then render them into native Word OMML equations — preferably by building a JSON registry and running `scripts/replace_math.py` (deterministic Pandoc conversion + exact-position splice; its summary's `not_found`/`still_plain_text` must be empty). Every conversion is an **in-place replacement**: the OMML object goes exactly where the original token was and the original plain text is removed; never append rendered math at the end of a paragraph or merge adjacent expressions. Do not satisfy this standard by manually italicizing normal text. For brand-new documents prefer source-first authoring per `references/generate-from-source.md`.
 7. For paper-style citations, read `references/citation-crossrefs-ooxml.md` and convert body citations such as `[1]`, `[1][2]`, `[1,2]`, or `[1-3]` into superscript Word cross-references to the matching bibliography entries; format the bibliography entries themselves per `references/reference-style-gbt7714.md` (GB/T 7714).
-8. If editing an existing DOCX and Python is available, run `scripts/audit_docx_format.py <path-to-docx>` after formatting. Fix `FAIL` items and inspect `WARN` items; this script is a guardrail, not a substitute for visual QA. For the two safest mechanical fixes (full-width citation brackets and ASCII punctuation between CJK characters) you may run `scripts/normalize_docx.py <path-to-docx>`.
+8. If editing an existing DOCX and Python is available, run `scripts/audit_docx_format.py <path-to-docx>` after formatting. Fix `FAIL` items and inspect `WARN` items; this script is a guardrail, not a substitute for visual QA. Use `scripts/normalize_docx.py` for the mechanical fixes: citation brackets and CJK punctuation (always on), plus `--units` (number-unit spacing), `--tables` (clear in-table shading, zero `w:tblLook`, repeat header rows), and `--update-fields` (Word refreshes TOC/REF fields on open); `--all` enables everything.
 9. Before delivery, run a formatting audit against the checklist in `references/formatting-standard.md`.
 10. Treat the Must-Fix Audit below as a completion gate: do not deliver or claim compliance while any must-fix item remains, and disclose any item that could not be verified in the current environment.
-11. When possible, render/export the DOCX to PDF or page images and inspect pages for overlap, clipping, table overflow, font substitution, broken cross-references, formula rendering errors, and appendix code readability.
+11. Do not run PDF/page-image render inspections unless the user explicitly asks for one. The audit script plus the Must-Fix gate are the completion criteria; recommend that the user opens the delivered file once in MS Word (the canonical renderer) to spot-check layout, fonts, and formulas.
 
 ## Core Rules
 
