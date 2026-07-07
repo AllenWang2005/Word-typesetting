@@ -603,6 +603,178 @@ class EquationNumberTests(unittest.TestCase):
         self.assertNotIn("EQUATION_NUMBER_CENTER", codes(issues))
 
 
+class FormulaMixedItalicTests(unittest.TestCase):
+    MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+
+    def _math(self, run_xml: str) -> ET.Element:
+        return ET.fromstring(
+            f'<w:document xmlns:w="{W}" xmlns:m="{self.MATH_NS}"><w:body><w:p>'
+            f'<m:oMath>{run_xml}</m:oMath></w:p></w:body></w:document>'
+        )
+
+    def test_mixed_italic_run_with_digits_flagged(self):
+        # A single italic run 'F=44.5' slants its digits even though it contains a letter.
+        issues = []
+        aud.audit_formula_digit_italics(
+            self._math('<m:r><w:rPr><w:i/></w:rPr><m:t>F=44.5</m:t></m:r>'), issues
+        )
+        self.assertIn("FORMULA_DIGIT_ITALIC", codes(issues))
+
+    def test_omml_sty_mval_italic_digits_flagged(self):
+        # OMML style italics use m:sty m:val="i" (the m namespace), not w:val.
+        issues = []
+        aud.audit_formula_digit_italics(
+            self._math(
+                '<m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>44.5</m:t></m:r>'
+            ),
+            issues,
+        )
+        self.assertIn("FORMULA_DIGIT_ITALIC", codes(issues))
+
+    def test_multiletter_default_italic_flagged(self):
+        # 'km' with no upright style renders math-italic by default — no w:i needed.
+        issues = []
+        aud.audit_formula_multiletter_italics(self._math('<m:r><m:t>km</m:t></m:r>'), issues)
+        self.assertIn("FORMULA_MULTILETTER_ITALIC", codes(issues))
+
+    def test_multiletter_upright_sty_ok(self):
+        issues = []
+        aud.audit_formula_multiletter_italics(
+            self._math('<m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t>km</m:t></m:r>'), issues
+        )
+        self.assertNotIn("FORMULA_MULTILETTER_ITALIC", codes(issues))
+
+    def test_multiletter_nor_ok(self):
+        issues = []
+        aud.audit_formula_multiletter_italics(
+            self._math('<m:r><m:rPr><m:nor/></m:rPr><m:t>max</m:t></m:r>'), issues
+        )
+        self.assertNotIn("FORMULA_MULTILETTER_ITALIC", codes(issues))
+
+    def test_single_letter_variable_ok(self):
+        issues = []
+        aud.audit_formula_multiletter_italics(self._math('<m:r><m:t>Q</m:t></m:r>'), issues)
+        self.assertNotIn("FORMULA_MULTILETTER_ITALIC", codes(issues))
+
+
+class ManualItalicMathTests(unittest.TestCase):
+    def _p(self, text: str, italic: bool) -> ET.Element:
+        rpr = "<w:rPr><w:i/></w:rPr>" if italic else ""
+        return ET.fromstring(
+            f'<w:p xmlns:w="{W}"><w:r>{rpr}<w:t xml:space="preserve">{text}</w:t></w:r></w:p>'
+        )
+
+    def test_italic_equation_run_flagged(self):
+        issues = []
+        aud.audit_manual_italic_math([self._p("F = 44.5 km²", True)], issues)
+        self.assertIn("MANUAL_ITALIC_MATH", codes(issues))
+
+    def test_upright_equation_run_not_flagged_here(self):
+        # Plain-text math without italics is FORMULA_TEXT's job, not this check's.
+        issues = []
+        aud.audit_manual_italic_math([self._p("F = 44.5 km²", False)], issues)
+        self.assertNotIn("MANUAL_ITALIC_MATH", codes(issues))
+
+    def test_italic_prose_without_math_ok(self):
+        issues = []
+        aud.audit_manual_italic_math([self._p("Journal of Hydrology", True)], issues)
+        self.assertNotIn("MANUAL_ITALIC_MATH", codes(issues))
+
+
+class CaptionAlignmentTests(unittest.TestCase):
+    def test_left_aligned_caption_flagged(self):
+        issues = []
+        aud.audit_caption_alignment([make_p("表 1-1 方案比较", jc="left")], issues)
+        self.assertIn("CAPTION_ALIGN", codes(issues))
+
+    def test_centered_caption_ok(self):
+        issues = []
+        aud.audit_caption_alignment([make_p("图 2-3 流量过程线", jc="center")], issues)
+        self.assertNotIn("CAPTION_ALIGN", codes(issues))
+
+    def test_styled_caption_without_direct_jc_ok(self):
+        # A named style may center the caption; only direct formatting is judged.
+        issues = []
+        aud.audit_caption_alignment([make_p("表 1-1 方案比较", style="Caption")], issues)
+        self.assertNotIn("CAPTION_ALIGN", codes(issues))
+
+
+class NumberUnitSpacingTests(unittest.TestCase):
+    def test_glued_unit_flagged(self):
+        issues = []
+        aud.audit_number_unit_spacing([make_p("最大流量为20km处的断面控制。")], issues)
+        self.assertIn("NUMBER_UNIT_SPACING", codes(issues))
+
+    def test_glued_cubic_metre_flagged(self):
+        issues = []
+        aud.audit_number_unit_spacing([make_p("设计流量为216m³/s。")], issues)
+        self.assertIn("NUMBER_UNIT_SPACING", codes(issues))
+
+    def test_spaced_unit_ok(self):
+        issues = []
+        aud.audit_number_unit_spacing([make_p("设计流量为 216 m³/s，距离为 20 km。")], issues)
+        self.assertNotIn("NUMBER_UNIT_SPACING", codes(issues))
+
+    def test_space_before_percent_flagged(self):
+        issues = []
+        aud.audit_number_unit_spacing([make_p("设计频率为 0.1 %的洪水。")], issues)
+        self.assertIn("NUMBER_UNIT_SPACING", codes(issues))
+
+    def test_attached_percent_ok(self):
+        issues = []
+        aud.audit_number_unit_spacing([make_p("设计频率为0.1%的洪水，水温 25℃。")], issues)
+        self.assertNotIn("NUMBER_UNIT_SPACING", codes(issues))
+
+
+class FloatOrderTests(unittest.TestCase):
+    def test_caption_before_first_reference_flagged(self):
+        issues = []
+        paragraphs = [
+            make_p("表 1-1 方案比较"),
+            make_p("正文在表格之后才提到，如表 1-1 所示。"),
+        ]
+        aud.audit_float_order(paragraphs, issues)
+        self.assertIn("FLOAT_ORDER", codes(issues))
+
+    def test_reference_before_caption_ok(self):
+        issues = []
+        paragraphs = [
+            make_p("各方案指标如表 1-1 所示。"),
+            make_p("表 1-1 方案比较"),
+        ]
+        aud.audit_float_order(paragraphs, issues)
+        self.assertNotIn("FLOAT_ORDER", codes(issues))
+
+    def test_unreferenced_caption_not_flagged(self):
+        # No mention anywhere: left to human review, not flagged as inverted order.
+        issues = []
+        aud.audit_float_order([make_p("表 1-1 方案比较")], issues)
+        self.assertNotIn("FLOAT_ORDER", codes(issues))
+
+
+class TableHeaderRepeatTests(unittest.TestCase):
+    def _table(self, header: bool, rows: int = 2) -> ET.Element:
+        trpr = "<w:trPr><w:tblHeader/></w:trPr>" if header else ""
+        first = f"<w:tr>{trpr}<w:tc><w:p><w:r><w:t>h</w:t></w:r></w:p></w:tc></w:tr>"
+        body = "<w:tr><w:tc><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr>" * (rows - 1)
+        return make_doc(f"<w:tbl>{first}{body}</w:tbl>")
+
+    def test_multirow_without_repeat_flagged(self):
+        issues = []
+        aud.audit_table_header_repeat(self._table(header=False), issues)
+        self.assertIn("TABLE_HEADER_REPEAT", codes(issues))
+
+    def test_multirow_with_repeat_ok(self):
+        issues = []
+        aud.audit_table_header_repeat(self._table(header=True), issues)
+        self.assertNotIn("TABLE_HEADER_REPEAT", codes(issues))
+
+    def test_single_row_table_ok(self):
+        issues = []
+        aud.audit_table_header_repeat(self._table(header=False, rows=1), issues)
+        self.assertNotIn("TABLE_HEADER_REPEAT", codes(issues))
+
+
 class SummaryTests(unittest.TestCase):
     def test_omitted_issue_count_reported(self):
         issues = []

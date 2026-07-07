@@ -70,9 +70,12 @@ When Pandoc is unavailable, use another route that still produces native Word OM
 
 ## Italic vs. upright (do not blanket-italicize)
 
-- Only variable letters are italic. Digits, operators, parentheses, commas, units, and function names are upright. In OMML this is the default — do **not** add `<w:i/>` to the whole equation, which forces the digits italic too (the most common failure).
+- Only variable letters are italic. Digits, operators, parentheses, commas, units, and function names are upright.
+- **Know the OMML defaults, they cut both ways.** Digits and operators are upright by default — do **not** add `<w:i/>` / `<m:sty m:val="i"/>` to the whole equation, which forces the digits italic too. But *letters* are **math-italic by default**: a unit like `km`, a function like `max`, or an explanatory subscript left as a bare `<m:r>` renders *italic* even though no italic marker exists anywhere in the XML. Upright text inside a formula must carry an explicit upright style, `<m:rPr><m:sty m:val="p"/></m:rPr>` (this is what Pandoc emits for `\mathrm{...}` / `\text{...}`) or `<m:nor/>`. "I didn't add italics" is not the same as "it renders upright".
+- So the LaTeX source must already mark every upright element (`\mathrm`, `\text`, standard function commands like `\max`); if the converted OMML lacks the `m:sty val="p"` markers, the styling was lost in conversion and must be fixed.
 - Multi-letter coefficients are not one italic variable: use one variable plus an upright subscript, e.g. recession coefficients `C_I` / `C_G` / `C_S` (italic `C`, upright `I`/`G`/`S`), never adjacent italic letters `CI` / `CG` (reads as `C × I`).
-- The auditor flags `FORMULA_DIGIT_ITALIC` (an italic number/operator) and `EQUATION_NUMBER_CENTER` (a centered numbered equation).
+- Never fake a formula with an italicized plain-text run (`F = 44.5 km²` in ordinary text with `w:i`) — that both bypasses OMML and slants the digits/units.
+- The auditor flags `FORMULA_DIGIT_ITALIC` (an italic number/operator, including inside mixed runs like an italic `F=44.5`), `FORMULA_MULTILETTER_ITALIC` (2+ adjacent letters in a formula with no explicit upright style — a unit/function left at the italic default, or a `CI`-style coefficient), `MANUAL_ITALIC_MATH` (an italicized plain-text pseudo-formula), and `EQUATION_NUMBER_CENTER` (a centered numbered equation).
 
 ## Verification
 

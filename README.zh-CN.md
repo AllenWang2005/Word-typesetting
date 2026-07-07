@@ -129,7 +129,10 @@ python scripts/audit_docx_format.py path/to/report.docx --json   # 机器可读
 | `TABLE_BORDERS` | WARN | 表格有竖线/内部网格(非三线表) |
 | `TABLE_SHADING` | FAIL | 表格/单元格带底纹,含表格样式 `firstRow` 条件格式带来的表头底纹(三线表必须白底) |
 | `TABLE_RULES` | WARN | 三线不对:顶/底线缺失、行间横线、或表头下线不比顶/底线细 |
+| `TABLE_HEADER_REPEAT` | WARN | 多行表格表头未设跨页重复(`w:tblHeader`) |
 | `CAPTION_POSITION` | WARN | 表题在表下 / 图题在图上 |
+| `CAPTION_ALIGN` | WARN | 表题/图题段落没有居中 |
+| `FLOAT_ORDER` | WARN | 图/表出现在正文首次引用之前(应先引用后出现) |
 | `COLOR` | WARN | 多余的非黑色字体(已排除超链接/主题色) |
 | `CITATION_BRACKETS` | FAIL | 全角引用括号 `［1］` |
 | `CITATION_FIELDS` | FAIL | 有引用但无 `REF ref_###` 字段 |
@@ -137,7 +140,10 @@ python scripts/audit_docx_format.py path/to/report.docx --json   # 机器可读
 | `VISIBLE_LATEX` | FAIL | 残留可见 LaTeX 源码而非 OMML |
 | `FORMULA_TEXT` | FAIL/WARN | 本应是 OMML 的纯文本公式/量符号 |
 | `MATH_DUPLICATE` | FAIL | 公式对象的内容仍以纯文本形式留在同一段落(追加而非原位替换) |
-| `FORMULA_DIGIT_ITALIC` | WARN | 公式里的数字/运算符被斜体(只有变量该斜体) |
+| `FORMULA_DIGIT_ITALIC` | WARN | 公式里的数字/运算符被斜体,含斜体 `F=44.5` 这类混合 run |
+| `FORMULA_MULTILETTER_ITALIC` | WARN | 公式里 2+ 相邻字母停留在 OMML 默认斜体(单位/函数名需 `m:sty="p"` 正体;`CI` 式系数需拆开) |
+| `MANUAL_ITALIC_MATH` | FAIL | 用普通文本手工斜体冒充公式(如斜体 `F = 44.5 km²`) |
+| `NUMBER_UNIT_SPACING` | WARN | 数字与单位粘连(`20km` 应为 `20 km`),或 `%`/`°`/`℃` 前多了空格 |
 | `EQUATION_NUMBER_CENTER` | WARN | 带编号的独立公式整体居中(编号应靠右) |
 
 它刻意保持**领域中立**——不写死任何学科专有符号表。

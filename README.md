@@ -137,7 +137,10 @@ with a `FAIL/WARN` summary, and notes any per-code truncation. Checks include:
 | `TABLE_BORDERS` | WARN | Table has vertical/inner borders (not a three-line table) |
 | `TABLE_SHADING` | FAIL | Table/cell shading, direct or from the table style's `firstRow` format (three-line tables are white) |
 | `TABLE_RULES` | WARN | Missing/wrong three-line rules: no visible top/bottom rules, row-to-row insideH, or header rule not thinner |
+| `TABLE_HEADER_REPEAT` | WARN | Multi-row table header not set to repeat across pages (`w:tblHeader`) |
 | `CAPTION_POSITION` | WARN | Table caption below table / figure caption above figure |
+| `CAPTION_ALIGN` | WARN | A 表/图 caption paragraph is not centered |
+| `FLOAT_ORDER` | WARN | Figure/table placed before its first in-text reference |
 | `COLOR` | WARN | Stray non-black font color (hyperlinks/theme colors excluded) |
 | `CITATION_BRACKETS` | FAIL | Full-width citation brackets `［1］` |
 | `CITATION_FIELDS` | FAIL | Citations exist but no `REF ref_###` fields |
@@ -145,7 +148,10 @@ with a `FAIL/WARN` summary, and notes any per-code truncation. Checks include:
 | `VISIBLE_LATEX` | FAIL | Visible LaTeX source instead of OMML |
 | `FORMULA_TEXT` | FAIL/WARN | Plain-text formula / quantity symbol that should be OMML |
 | `MATH_DUPLICATE` | FAIL | Rendered OMML whose text still exists as plain text in the same paragraph (append-instead-of-replace) |
-| `FORMULA_DIGIT_ITALIC` | WARN | A number/operator in a formula is italic (only variables should be italic) |
+| `FORMULA_DIGIT_ITALIC` | WARN | A number/operator in a formula is italic, incl. mixed runs like an italic `F=44.5` |
+| `FORMULA_MULTILETTER_ITALIC` | WARN | 2+ adjacent letters in a formula at OMML's default italic (unit/function needs `m:sty="p"`; `CI`-style coefficient needs splitting) |
+| `MANUAL_ITALIC_MATH` | FAIL | An italicized plain-text pseudo-formula (e.g. italic `F = 44.5 km²`) instead of OMML |
+| `NUMBER_UNIT_SPACING` | WARN | `20km` glued (needs `20 km`) or a space before `%`/`°`/`℃` |
 | `EQUATION_NUMBER_CENTER` | WARN | A numbered display formula is centered (the number should be right-aligned) |
 
 It is intentionally **domain-neutral** — no hard-coded field-specific symbol list.
