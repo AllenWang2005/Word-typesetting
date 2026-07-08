@@ -34,6 +34,7 @@ def _load_audit_module():
 aud = _load_audit_module()
 
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+M = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 
 
 
@@ -115,7 +116,11 @@ def run_main_json(body_inner: str) -> dict:
 
 
 def make_doc(body_inner: str) -> ET.Element:
-    return ET.fromstring(f'<w:document xmlns:w="{W}"><w:body>{body_inner}</w:body></w:document>')
+    return ET.fromstring(f'<w:document xmlns:w="{W}" xmlns:m="{M}"><w:body>{body_inner}</w:body></w:document>')
+
+
+def make_styles(styles_inner: str) -> ET.Element:
+    return ET.fromstring(f'<w:styles xmlns:w="{W}">{styles_inner}</w:styles>')
 
 
 TABLE_XML = "<w:tbl><w:tr><w:tc><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"
@@ -286,6 +291,47 @@ class FontTests(unittest.TestCase):
         issues = []
         aud.audit_fonts([make_p_with_font("某某水库水利计算课程设计", "黑体", jc="center")], issues)
         self.assertNotIn("BODY_FONT", codes(issues))
+
+
+class HeadingStyleFontTests(unittest.TestCase):
+    def test_localized_numeric_heading_style_id_level2_and_3(self):
+        self.assertEqual(aud.heading_level(make_p("1.1 Method", style="21"), "1.1 Method"), 2)
+        self.assertEqual(aud.heading_level(make_p("1.1.1 Detail", style="31"), "1.1.1 Detail"), 3)
+
+    def test_used_heading_style_without_font_is_fail(self):
+        styles = make_styles(
+            '<w:style w:type="paragraph" w:styleId="21">'
+            '<w:pPr><w:outlineLvl w:val="1"/></w:pPr>'
+            '</w:style>'
+        )
+        issues = []
+        aud.audit_heading_style_fonts(styles, [make_p("1.1 Method", style="21")], issues)
+        self.assertIn("HEADING_STYLE_FONT", codes(issues))
+        self.assertEqual({i.severity for i in issues if i.code == "HEADING_STYLE_FONT"}, {"FAIL"})
+
+    def test_heading1_style_with_heiti_not_bold_ok(self):
+        styles = make_styles(
+            '<w:style w:type="paragraph" w:styleId="1">'
+            '<w:pPr><w:outlineLvl w:val="0"/></w:pPr>'
+            '<w:rPr><w:rFonts w:eastAsia="Heiti" w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>'
+            '<w:b w:val="0"/></w:rPr>'
+            '</w:style>'
+        )
+        issues = []
+        aud.audit_heading_style_fonts(styles, [make_p("1 Introduction", style="1")], issues)
+        self.assertNotIn("HEADING_STYLE_FONT", codes(issues))
+        self.assertNotIn("HEADING_BOLD", codes(issues))
+
+    def test_heading1_style_bold_is_fail(self):
+        styles = make_styles(
+            '<w:style w:type="paragraph" w:styleId="1">'
+            '<w:pPr><w:outlineLvl w:val="0"/></w:pPr>'
+            '<w:rPr><w:rFonts w:eastAsia="Heiti"/><w:b/></w:rPr>'
+            '</w:style>'
+        )
+        issues = []
+        aud.audit_heading_style_fonts(styles, [make_p("1 Introduction", style="1")], issues)
+        self.assertIn("HEADING_BOLD", codes(issues))
 
 
 class HeadingNoStyleTests(unittest.TestCase):
@@ -485,6 +531,31 @@ class TableRulesTests(unittest.TestCase):
         issues = []
         aud.audit_table_rules(root, issues)
         self.assertNotIn("TABLE_RULES", codes(issues))
+
+
+class FormulaLayoutTableTests(unittest.TestCase):
+    def _layout_table(self) -> ET.Element:
+        return make_doc(
+            '<w:tbl><w:tr>'
+            '<w:tc><w:p/></w:tc>'
+            '<w:tc><w:p><m:oMath><m:r><m:t>F</m:t></m:r></m:oMath></w:p></w:tc>'
+            '<w:tc><w:p><w:r><w:t>(3-1)</w:t></w:r></w:p></w:tc>'
+            '</w:tr></w:tbl>'
+        )
+
+    def test_formula_layout_table_detected(self):
+        table = self._layout_table().find(".//w:tbl", aud.NS)
+        self.assertTrue(aud.is_formula_layout_table(table))
+
+    def test_formula_layout_table_not_forced_to_three_line(self):
+        issues = []
+        aud.audit_table_rules(self._layout_table(), issues)
+        self.assertNotIn("TABLE_RULES", codes(issues))
+
+    def test_formula_layout_table_skips_table_formula_text(self):
+        issues = []
+        aud.audit_table_formula_text(self._layout_table(), issues)
+        self.assertNotIn("FORMULA_TEXT_TABLE", codes(issues))
 
 
 class MathDuplicationTests(unittest.TestCase):

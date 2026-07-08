@@ -219,9 +219,25 @@ def math_run_is_upright(run: ET.Element) -> bool:
     return (m_attr(sty, "val") or w_attr(sty, "val")) in ("p", "b")
 
 
+def heading_level_from_style_id(style_id: str) -> Optional[int]:
+    normalized = re.sub(r"[\s_-]+", "", style_id).lower()
+    if not normalized:
+        return None
+    match = re.search(r"(?:heading|标题)([1-9])", normalized) or re.fullmatch(r"([1-9])", normalized)
+    if match:
+        return int(match.group(1))
+    # Some localized Word/WPS documents use numeric built-in style IDs such as
+    # "1" / "21" / "31" for Heading 1/2/3. The old audit treated "21" and
+    # "31" as non-headings, so inherited wrong heading fonts could slip through.
+    match = re.fullmatch(r"([1-9])1", normalized)
+    if match:
+        return int(match.group(1))
+    return None
+
+
 def is_heading_style(style_id: str) -> bool:
     normalized = re.sub(r"[\s_-]+", "", style_id).lower()
-    return bool(HEADING_STYLE_RE.match(normalized)) or normalized.startswith("heading")
+    return heading_level_from_style_id(style_id) is not None or bool(HEADING_STYLE_RE.match(normalized)) or normalized.startswith("heading")
 
 
 def is_heading(paragraph: ET.Element, text: str) -> bool:
@@ -230,9 +246,9 @@ def is_heading(paragraph: ET.Element, text: str) -> bool:
 
 def heading_level(paragraph: ET.Element, text: str) -> Optional[int]:
     style = re.sub(r"[\s_-]+", "", paragraph_style(paragraph)).lower()
-    match = re.search(r"(?:heading|标题)([1-9])", style) or re.fullmatch(r"([1-9])", style)
-    if match:
-        return int(match.group(1))
+    level = heading_level_from_style_id(style)
+    if level is not None:
+        return level
     if STRICT_HEADING_TEXT_RE.match(text):
         return 1
     return None
@@ -243,7 +259,14 @@ def run_text(run: ET.Element) -> str:
 
 
 def run_eastasia_font(run: ET.Element) -> Optional[str]:
-    return w_attr(run.find("w:rPr/w:rFonts", NS), "eastAsia")
+    rfonts = run.find("w:rPr/w:rFonts", NS)
+    if rfonts is None:
+        return None
+    for key in ("eastAsia", "hAnsi", "ascii", "cs"):
+        value = w_attr(rfonts, key)
+        if value:
+            return value
+    return None
 
 
 def is_heading1_style(style_id: str) -> bool:
@@ -415,6 +438,121 @@ def audit_fonts(
                 break
 
 
+def audit_heading_style_fonts(
+    styles_root: Optional[ET.Element],
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """FAIL when heading fonts/boldness are wrong through style inheritance.
+
+    Direct run checks are not enough: WPS/Word can render headings from
+    styles.xml even when word/document.xml has no run-level rFonts. This check
+    audits the heading styles actually used by the document and each heading's
+    effective font after direct-formatting/style fallback.
+    """
+    style_map = build_style_map(styles_root)
+    if not style_map:
+        return
+
+    used_heading_styles: dict[str, int] = {}
+    for paragraph in paragraphs:
+        text = paragraph_text(paragraph).strip()
+        if not text:
+            continue
+        level = paragraph_heading_level(paragraph, text, style_map)
+        style_id = paragraph_style(paragraph)
+        if level in (1, 2, 3) and style_id:
+            used_heading_styles[style_id] = level
+
+    for style_id, level in used_heading_styles.items():
+        font = style_chain_font(style_id, style_map)
+        bold = style_chain_bold(style_id, style_map)
+        if level in (1, 2):
+            if not font or not HEI_FONT_RE.search(font):
+                add_issue(
+                    issues,
+                    "FAIL",
+                    "HEADING_STYLE_FONT",
+                    f"Heading level {level} style '{style_id}' has no explicit Heiti eastAsia font; "
+                    "set w:style/w:rPr/w:rFonts (eastAsia=Heiti, ascii/hAnsi=Times New Roman) so WPS/Word "
+                    "does not inherit the wrong heading font.",
+                    counts,
+                )
+            if bold is True:
+                add_issue(
+                    issues,
+                    "FAIL",
+                    "HEADING_BOLD",
+                    f"Heading level {level} style '{style_id}' is bold; level-1/2 headings should be Heiti but not bold.",
+                    counts,
+                )
+        elif level == 3:
+            if not font or not SONG_FONT_RE.search(font) or HEI_FONT_RE.search(font):
+                add_issue(
+                    issues,
+                    "FAIL",
+                    "HEADING_STYLE_FONT",
+                    f"Heading level 3 style '{style_id}' has no explicit Songti eastAsia font; "
+                    "level-3 headings should be bold Songti.",
+                    counts,
+                )
+            if bold is not True:
+                add_issue(
+                    issues,
+                    "FAIL",
+                    "HEADING_BOLD",
+                    f"Heading level 3 style '{style_id}' is not explicitly bold; level-3 headings should be bold Songti.",
+                    counts,
+                )
+
+    for index, paragraph in enumerate(paragraphs, start=1):
+        text = paragraph_text(paragraph).strip()
+        if not text:
+            continue
+        level = paragraph_heading_level(paragraph, text, style_map)
+        if level not in (1, 2, 3):
+            continue
+        font = paragraph_effective_font(paragraph, style_map)
+        bold = paragraph_effective_bold(paragraph, style_map)
+        if level in (1, 2):
+            if not font or not HEI_FONT_RE.search(font):
+                add_issue(
+                    issues,
+                    "FAIL",
+                    "HEADING_FONT",
+                    f"Heading paragraph {index} level {level} resolves to font '{font or 'missing'}'; "
+                    "level-1/2 headings must render as Heiti.",
+                    counts,
+                )
+            if bold is True:
+                add_issue(
+                    issues,
+                    "FAIL",
+                    "HEADING_BOLD",
+                    f"Heading paragraph {index} level {level} resolves as bold; level-1/2 headings must not be bold.",
+                    counts,
+                )
+        elif level == 3:
+            if not font or not SONG_FONT_RE.search(font) or HEI_FONT_RE.search(font):
+                add_issue(
+                    issues,
+                    "FAIL",
+                    "HEADING_FONT",
+                    f"Heading paragraph {index} level 3 resolves to font '{font or 'missing'}'; "
+                    "level-3 headings must render as Songti.",
+                    counts,
+                )
+            if bold is False:
+                add_issue(
+                    issues,
+                    "FAIL",
+                    "HEADING_BOLD",
+                    f"Heading paragraph {index} level 3 resolves as not bold; level-3 headings should be bold.",
+                    counts,
+                )
+
+
 def audit_captions(root: ET.Element, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:
     """Heuristic check: table captions go above tables, figure captions go below figures."""
     body = root.find("w:body", NS)
@@ -423,7 +561,7 @@ def audit_captions(root: ET.Element, issues: list[Issue], counts: Optional[dict[
     items: list[str] = []
     for child in list(body):
         if child.tag == f"{W}tbl":
-            items.append("table")
+            items.append("para" if is_formula_layout_table(child) else "table")
         elif child.tag == f"{W}p":
             text = paragraph_text(child).strip()
             if TABLE_CAPTION_RE.match(text):
@@ -461,6 +599,8 @@ def audit_captions(root: ET.Element, issues: list[Issue], counts: Optional[dict[
 
 def audit_tables(root: ET.Element, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:
     for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
+        if is_formula_layout_table(table):
+            continue
         # Include OMML math runs (m:r) so in-table formulas/symbols are size-checked too,
         # not just ordinary w:r text. Formula size is carried on w:rPr/w:sz inside m:r.
         for run in table.findall(".//w:r", NS) + table.findall(".//m:r", NS):
@@ -578,8 +718,111 @@ def style_chain(style_id: str, style_map: dict[str, ET.Element]) -> list[ET.Elem
     return chain
 
 
+def on_off_value(element: Optional[ET.Element]) -> Optional[bool]:
+    """Return True/False for Word on/off properties, or None when absent."""
+    if element is None:
+        return None
+    value = (w_attr(element, "val") or "true").lower()
+    return value not in ("false", "0", "off")
+
+
+def font_from_rpr(rpr: Optional[ET.Element]) -> Optional[str]:
+    if rpr is None:
+        return None
+    rfonts = rpr.find("w:rFonts", NS)
+    if rfonts is None:
+        return None
+    for key in ("eastAsia", "hAnsi", "ascii", "cs"):
+        value = w_attr(rfonts, key)
+        if value:
+            return value
+    return None
+
+
+def style_outline_level(style: ET.Element) -> Optional[int]:
+    outline = style.find("w:pPr/w:outlineLvl", NS)
+    value = w_attr(outline, "val")
+    if value is None:
+        return None
+    try:
+        return int(value) + 1
+    except ValueError:
+        return None
+
+
+def style_heading_level(style: ET.Element) -> Optional[int]:
+    return style_outline_level(style) or heading_level_from_style_id(style.get(f"{W}styleId") or "")
+
+
+def style_chain_font(style_id: str, style_map: dict[str, ET.Element]) -> Optional[str]:
+    for style in style_chain(style_id, style_map):
+        font = font_from_rpr(style.find("w:rPr", NS))
+        if font:
+            return font
+    return None
+
+
+def style_chain_bold(style_id: str, style_map: dict[str, ET.Element]) -> Optional[bool]:
+    for style in style_chain(style_id, style_map):
+        value = on_off_value(style.find("w:rPr/w:b", NS))
+        if value is not None:
+            return value
+    return None
+
+
+def paragraph_heading_level(paragraph: ET.Element, text: str, style_map: dict[str, ET.Element]) -> Optional[int]:
+    level = heading_level(paragraph, text)
+    if level is not None:
+        return level
+    style = style_map.get(paragraph_style(paragraph))
+    return style_heading_level(style) if style is not None else None
+
+
+def paragraph_effective_font(paragraph: ET.Element, style_map: dict[str, ET.Element]) -> Optional[str]:
+    for run in paragraph.findall(".//w:r", NS):
+        if run_text(run).strip():
+            font = run_eastasia_font(run)
+            if font:
+                return font
+    style_id = paragraph_style(paragraph)
+    return style_chain_font(style_id, style_map) if style_id else None
+
+
+def paragraph_effective_bold(paragraph: ET.Element, style_map: dict[str, ET.Element]) -> Optional[bool]:
+    for run in paragraph.findall(".//w:r", NS):
+        if run_text(run).strip():
+            value = on_off_value(run.find("w:rPr/w:b", NS))
+            if value is not None:
+                return value
+    style_id = paragraph_style(paragraph)
+    return style_chain_bold(style_id, style_map) if style_id else None
+
+
 def table_style_id(table: ET.Element) -> Optional[str]:
     return w_attr(table.find("w:tblPr/w:tblStyle", NS), "val")
+
+
+def element_text(element: ET.Element) -> str:
+    text = "".join(node.text or "" for node in element.findall(".//w:t", NS))
+    text += "".join(node.text or "" for node in element.findall(".//m:t", NS))
+    return text
+
+
+def is_formula_layout_table(table: ET.Element) -> bool:
+    """True for a borderless 1-row helper table used only to lay out equations.
+
+    A 1x2/1x3 equation layout table is a layout device, not a data table, so
+    it must not be forced into three-line-table rules or header-repeat checks.
+    """
+    rows = table.findall("w:tr", NS)
+    if len(rows) != 1:
+        return False
+    cells = rows[0].findall("w:tc", NS)
+    if len(cells) not in (2, 3):
+        return False
+    text = element_text(table)
+    has_math = table.find(".//m:oMath", NS) is not None or table.find(".//m:oMathPara", NS) is not None
+    return bool(has_math and EQUATION_NUMBER_RE.search(text))
 
 
 def audit_table_shading(
@@ -596,6 +839,8 @@ def audit_table_shading(
     """
     style_map = build_style_map(styles_root)
     for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
+        if is_formula_layout_table(table):
+            continue
         if any(shading_is_visible(shd) for shd in table.findall(".//w:shd", NS)):
             add_issue(
                 issues,
@@ -651,6 +896,8 @@ def audit_table_rules(
     """
     style_map = build_style_map(styles_root)
     for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
+        if is_formula_layout_table(table):
+            continue
         borders = resolve_table_borders(table, style_map)
         if borders is None:
             add_issue(
@@ -771,6 +1018,8 @@ def audit_table_borders(
     """
     style_map = build_style_map(styles_root)
     for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
+        if is_formula_layout_table(table):
+            continue
         sources = [table.find("w:tblPr/w:tblBorders", NS)]
         sources.extend(table.findall(".//w:tblPrEx/w:tblBorders", NS))
         sources.extend(table.findall(".//w:tc/w:tcPr/w:tcBorders", NS))
@@ -1135,6 +1384,8 @@ def audit_table_header_repeat(
 ) -> None:
     """Warn when a multi-row table's header row is not set to repeat across pages."""
     for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
+        if is_formula_layout_table(table):
+            continue
         rows = table.findall("w:tr", NS)
         if len(rows) < 2:
             continue
@@ -1186,6 +1437,8 @@ def audit_table_formula_text(
     equations in cells are high-confidence signals and are reported here.
     """
     for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
+        if is_formula_layout_table(table):
+            continue
         for paragraph in table.findall(".//w:p", NS):
             text = paragraph_text(paragraph).strip()
             if not text or has_omml(paragraph):
@@ -1495,6 +1748,7 @@ def main() -> int:
     audit_headings(paragraphs, issues, issue_counts)
     audit_heading_styles(paragraphs[:bib_index], issues, issue_counts)
     audit_fonts(paragraphs[:bib_index], issues, issue_counts)
+    audit_heading_style_fonts(styles_root, paragraphs[:bib_index], issues, issue_counts)
     audit_tables(root, issues, issue_counts)
     audit_table_borders(root, issues, issue_counts, styles_root)
     audit_table_shading(root, issues, issue_counts, styles_root)

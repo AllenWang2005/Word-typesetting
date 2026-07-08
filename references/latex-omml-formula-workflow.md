@@ -86,7 +86,8 @@ When Pandoc is unavailable, use another route that still produces native Word OM
 
 ## Display Formula Layout
 
-- The equation is centered and its number is right-aligned, but do **not** set the paragraph alignment to centered — that centers the number too. Use a left-aligned paragraph with two tab stops: a **center tab** at the column midpoint (equation) and a **right tab** at the right margin (number). Insert `<tab>` + equation + `<tab>` + `(3-3)`. A borderless 1×3 table (empty / equation centered / number right-aligned) is an acceptable alternative.
+- The equation is centered and its number is right-aligned, but do **not** set the paragraph alignment to centered — that centers the number too. Use a left-aligned paragraph with two tab stops: a **center tab** at the column midpoint (equation) and a **right tab** at the right margin (number). Insert `<tab>` + equation + `<tab>` + `(3-3)`.
+- If WPS or another renderer does not honor tab stops reliably, prefer a borderless one-row 1×3 formula layout table: left spacer cell empty, middle cell centered with the OMML equation, right cell right-aligned with the number. Keep left/right spacer widths equal so the middle cell is visually centered. This helper table is a formula layout device, not a three-line data table; the auditor intentionally skips it for table-border/header-repeat checks.
 - Number formulas by chapter in parentheses, e.g. `(3-1)`, `(3-2)`; reference them in text as "由式 (3-1) 可得".
 - Multi-line formulas should be aligned in LaTeX before conversion, typically with `aligned`.
 - Keep explanatory text such as `式中：` outside the equation when possible, with the following quantity symbols rendered as inline OMML.
@@ -108,5 +109,6 @@ After editing the DOCX:
 - Search for placeholders like `@@MATH_`, visible LaTeX commands such as `\frac`, and obvious plain-text equations such as `Q =` or `N_p =`.
 - Check for append-instead-of-replace damage: no paragraph may contain both an OMML object and the same expression as plain text, and no paragraph may end with a trailing cluster of math objects or stray fragments (`mm，Cv`) that repeat values already in the prose (auditor: `MATH_DUPLICATE`).
 - Check that variables are italic and non-variables are upright in the rendered Word output.
+- Check that display equations visibly have the formula centered and the number right-aligned. If a tab-stop layout drifts in WPS, convert that equation line to the 1×3 formula layout table instead of centering the paragraph.
 - Render/export to PDF or page images and inspect formula baseline, line height, equation numbering, and table-cell formula fit.
 - If `scripts/audit_docx_format.py` reports formula warnings/failures, revise or explicitly explain why an item is intentionally not mathematical.

@@ -3,6 +3,26 @@
 All notable changes to this skill are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and the project uses semantic versioning.
 
+## [1.6.2] - 2026-07-08
+
+### Fixed
+- Auditor: heading font checks now resolve heading styles from `styles.xml`
+  and localized Word/WPS built-in style IDs such as `1`, `21`, and `31`.
+  Used heading styles without explicit Heiti/Songti fonts now fail the gate
+  (`HEADING_STYLE_FONT`), and wrong heading boldness fails as `HEADING_BOLD`.
+- Auditor: borderless one-row 1×3 formula layout tables are recognized as
+  equation-layout helpers, not data tables, so they are skipped by three-line
+  table, table-header-repeat, and table-formula-text checks.
+
+### Changed
+- Skill/reference docs now require heading fonts to be written into the actual
+  Word heading styles, not just visually applied to some runs; this prevents WPS
+  from inheriting the wrong title font.
+- Formula layout guidance now explicitly recommends the 1×3 layout-table fallback
+  when tab stops drift in WPS while preserving "equation centered, number right".
+- The checklist now distinguishes WPS/Word UI overlays (formatting marks, object
+  anchors, table gridlines, selection handles) from printable document content.
+
 ## [1.6.1] - 2026-07-08
 
 ### Fixed
@@ -126,6 +146,7 @@ paragraph ends as (italic) duplicates instead of replacing the original text in 
 ### Added
 - Initial release: the written standard (`SKILL.md` + `references/`), the `audit_docx_format.py` guardrail (punctuation, headings, fonts, captions, tables, citations, formulas; `--json` output and a FAIL/WARN summary), the `normalize_docx.py` safe auto-fixer, a non-compliant example, standard-library unit tests, and GitHub Actions CI.
 
+[1.6.2]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.6.2
 [1.6.1]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.6.1
 [1.6.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.6.0
 [1.5.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.5.0
