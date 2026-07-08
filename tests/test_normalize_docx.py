@@ -95,6 +95,18 @@ class TableHygieneFixTests(unittest.TestCase):
         first_row_end = out.find("</w:tr>")
         self.assertIn("<w:tblHeader/>", out[:first_row_end])
 
+    def test_row_exception_borders_cleared(self):
+        xml = (
+            '<w:tbl><w:tr><w:tblPrEx><w:tblBorders>'
+            '<w:left w:val="single" w:sz="4"/><w:insideH w:val="single" w:sz="4"/>'
+            '</w:tblBorders><w:tblCellMar><w:left w:w="108"/></w:tblCellMar></w:tblPrEx>'
+            '<w:tc><w:p/></w:tc></w:tr><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>'
+        )
+        out, counts = norm.fix_table_hygiene(xml)
+        self.assertNotIn("<w:tblBorders>", out)
+        self.assertIn("<w:tblCellMar>", out)
+        self.assertEqual(counts["row_exception_borders_cleared"], 1)
+
     def test_single_row_table_untouched(self):
         xml = "<w:tbl><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl>"
         out, counts = norm.fix_table_hygiene(xml)

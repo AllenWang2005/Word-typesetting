@@ -136,7 +136,7 @@ with a `FAIL/WARN` summary, and notes any per-code truncation. Checks include:
 | `TABLE_SIZE` | FAIL | Table text or in-table formula not 五号/10.5 pt (小四 ok; never larger than body) |
 | `TABLE_BORDERS` | FAIL | Table has vertical/inner borders, incl. grids drawn by the referenced table style |
 | `TABLE_SHADING` | FAIL | Table/cell shading, direct or from the table style's `firstRow` format (three-line tables are white) |
-| `TABLE_RULES` | FAIL | Missing/wrong three-line rules: no visible top/bottom rules, row-to-row insideH, or header rule not thinner |
+| `TABLE_RULES` | FAIL | Missing/wrong three-line rules: no visible top/bottom rules, row-to-row `insideH`, row-exception/cell-level body borders, or header rule not thinner |
 | `TABLE_HEADER_REPEAT` | WARN | Multi-row table header not set to repeat across pages (`w:tblHeader`) |
 | `CAPTION_POSITION` | WARN | Table caption below table / figure caption above figure |
 | `CAPTION_ALIGN` | FAIL | A 表/图 caption paragraph is not centered |

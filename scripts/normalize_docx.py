@@ -21,10 +21,13 @@ Opt-in fixes:
                      ``°`` / ``℃`` (``50 %`` -> ``50%``), inside w:t text only.
 ``--tables``         white three-line hygiene: clear every ``w:shd`` inside
                      tables to ``clear/auto``, zero the ``w:tblLook``
-                     conditional-formatting flags, and mark the first row of
+                     conditional-formatting flags, clear row-level exception
+                     borders (``w:tblPrEx/w:tblBorders``), and mark the first row of
                      every multi-row table to repeat across pages
                      (``w:tblHeader``). Borders are NOT touched — set them per
                      ``references/three-line-table-ooxml.md``.
+                     Row-level exception borders are cleared because they are
+                     inherited grid artifacts, not intentional three-line rules.
 ``--update-fields``  set ``w:updateFields`` in word/settings.xml so MS Word
                      (the canonical renderer) refreshes TOC/REF fields on open.
 ``--all``            all of the above.
@@ -59,6 +62,8 @@ WT_RE = re.compile(r"(<w:t(?:\s[^>]*)?>)([^<]*)(</w:t>)")
 TBL_RE = re.compile(r"<w:tbl>.*?</w:tbl>", re.S)
 SHD_RE = re.compile(r"<w:shd\b[^>]*/>")
 TBLLOOK_RE = re.compile(r"<w:tblLook\b[^>]*/>")
+TBLPREX_RE = re.compile(r"<w:tblPrEx\b[^>]*>.*?</w:tblPrEx>", re.S)
+TBLPREX_BORDERS_RE = re.compile(r"<w:tblBorders\b[^>]*>.*?</w:tblBorders>", re.S)
 TR_OPEN_RE = re.compile(r"<w:tr(?:\s[^>]*)?>")
 UNIT_GLUE_RE = re.compile(r"(\d)(km|mm|cm|kg|kN|kPa|MPa|kW|MW|kV|Hz|min)(?![A-Za-z])")
 UNIT_GLUE_M_RE = re.compile(r"(\d)(m)(?=[²³/])")
@@ -108,7 +113,12 @@ def fix_unit_spacing(xml: str) -> tuple[str, int]:
 
 def fix_table_hygiene(xml: str) -> tuple[str, dict[str, int]]:
     """Clear in-table shading, zero tblLook flags, repeat the header row."""
-    counts = {"shading_cleared": 0, "tbllook_zeroed": 0, "header_repeat_added": 0}
+    counts = {
+        "shading_cleared": 0,
+        "tbllook_zeroed": 0,
+        "row_exception_borders_cleared": 0,
+        "header_repeat_added": 0,
+    }
 
     def process_table(match: "re.Match[str]") -> str:
         block = match.group(0)
@@ -127,6 +137,13 @@ def fix_table_hygiene(xml: str) -> tuple[str, dict[str, int]]:
 
         block = SHD_RE.sub(clear_shd, block)
         block = TBLLOOK_RE.sub(zero_look, block)
+
+        def clear_row_exception_borders(m: "re.Match[str]") -> str:
+            cleaned, removed = TBLPREX_BORDERS_RE.subn("", m.group(0))
+            counts["row_exception_borders_cleared"] += removed
+            return cleaned
+
+        block = TBLPREX_RE.sub(clear_row_exception_borders, block)
         rows = TR_OPEN_RE.findall(block)
         if len(rows) >= 2:
             first_tr = TR_OPEN_RE.search(block)

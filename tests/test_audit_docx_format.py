@@ -322,6 +322,17 @@ class TableBordersTests(unittest.TestCase):
         aud.audit_table_borders(self._table(False), issues)
         self.assertNotIn("TABLE_BORDERS", codes(issues))
 
+    def test_row_exception_grid_borders_flagged(self):
+        root = make_doc(
+            '<w:tbl><w:tr><w:tblPrEx><w:tblBorders>'
+            '<w:left w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/>'
+            '</w:tblBorders></w:tblPrEx>'
+            '<w:tc><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+        )
+        issues = []
+        aud.audit_table_borders(root, issues)
+        self.assertIn("TABLE_BORDERS", codes(issues))
+
 
 class TableShadingTests(unittest.TestCase):
     def _table(self, shd: str = "", tbl_style: str = "") -> ET.Element:
@@ -421,6 +432,59 @@ class TableRulesTests(unittest.TestCase):
         issues = []
         aud.audit_table_rules(root, issues)
         self.assertIn("TABLE_RULES", codes(issues))
+
+    def test_row_exception_inside_h_flagged(self):
+        root = make_doc(
+            '<w:tbl><w:tblPr><w:tblBorders>'
+            '<w:top w:val="single" w:sz="12"/><w:bottom w:val="single" w:sz="12"/>'
+            '<w:insideH w:val="none"/><w:insideV w:val="none"/>'
+            '</w:tblBorders></w:tblPr>'
+            '<w:tr><w:tblPrEx><w:tblBorders>'
+            '<w:insideH w:val="single" w:sz="4"/>'
+            '</w:tblBorders></w:tblPrEx><w:tc><w:p><w:r><w:t>h</w:t></w:r></w:p></w:tc></w:tr>'
+            '<w:tr><w:tc><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr>'
+            '</w:tbl>'
+        )
+        issues = []
+        aud.audit_table_rules(root, issues)
+        self.assertIn("TABLE_RULES", codes(issues))
+
+    def test_body_cell_bottom_borders_flagged(self):
+        root = make_doc(
+            '<w:tbl><w:tblPr><w:tblBorders>'
+            '<w:top w:val="single" w:sz="12"/><w:bottom w:val="single" w:sz="12"/>'
+            '<w:insideH w:val="none"/><w:insideV w:val="none"/>'
+            '</w:tblBorders></w:tblPr>'
+            '<w:tr><w:tc><w:tcPr><w:tcBorders>'
+            '<w:bottom w:val="single" w:sz="6"/></w:tcBorders></w:tcPr>'
+            '<w:p><w:r><w:t>h</w:t></w:r></w:p></w:tc></w:tr>'
+            '<w:tr><w:tc><w:tcPr><w:tcBorders>'
+            '<w:bottom w:val="single" w:sz="6"/></w:tcBorders></w:tcPr>'
+            '<w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr>'
+            '<w:tr><w:tc><w:p><w:r><w:t>y</w:t></w:r></w:p></w:tc></w:tr>'
+            '</w:tbl>'
+        )
+        issues = []
+        aud.audit_table_rules(root, issues)
+        self.assertIn("TABLE_RULES", codes(issues))
+
+    def test_last_row_cell_bottom_rule_ok(self):
+        root = make_doc(
+            '<w:tbl><w:tblPr><w:tblBorders>'
+            '<w:top w:val="single" w:sz="12"/><w:bottom w:val="single" w:sz="12"/>'
+            '<w:insideH w:val="none"/><w:insideV w:val="none"/>'
+            '</w:tblBorders></w:tblPr>'
+            '<w:tr><w:tc><w:tcPr><w:tcBorders>'
+            '<w:bottom w:val="single" w:sz="6"/></w:tcBorders></w:tcPr>'
+            '<w:p><w:r><w:t>h</w:t></w:r></w:p></w:tc></w:tr>'
+            '<w:tr><w:tc><w:tcPr><w:tcBorders>'
+            '<w:bottom w:val="single" w:sz="12"/></w:tcBorders></w:tcPr>'
+            '<w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr>'
+            '</w:tbl>'
+        )
+        issues = []
+        aud.audit_table_rules(root, issues)
+        self.assertNotIn("TABLE_RULES", codes(issues))
 
 
 class MathDuplicationTests(unittest.TestCase):

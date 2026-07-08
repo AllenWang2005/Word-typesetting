@@ -68,7 +68,7 @@ Fail the formatting pass and revise if any of these remain:
 - A display equation has no chapter number `(3-1)`, or a numbered equation is never cited in prose (write “由式 (3-1) 可得” / “按式 (3-1) 计算”).
 - Level-1 Chinese headings do not have a blank-line visual gap before them when they follow body text, or a heading is stranded at the bottom of a page.
 - Table text is larger than the body or not the expected 五号/10.5 pt (小四/12 pt also accepted), unless the user or official template explicitly requires a different size.
-- A table has any cell shading / non-white fill (including header shading inherited from a table style's `firstRow` conditional format), or lacks visible thick top/bottom rules with a single thinner header rule.
+- A table has any cell shading / non-white fill (including header shading inherited from a table style's `firstRow` conditional format), lacks visible thick top/bottom rules with a single thinner header rule, or retains body-row cell borders that make it render as a grid.
 - Rendered math was appended instead of replacing the original text in place: a paragraph contains both an OMML object and the same expression as plain text, a trailing cluster of formulas repeats values from the prose, adjacent expressions were merged into one object, or stray fragments (`mm，Cv`) remain at a paragraph end.
 - Formulas, inline variables, quantity symbols, subscripts/superscripts, or math objects remain as ordinary styled text instead of LaTeX-rendered Word OMML, including bare one-letter quantity symbols in `式中` / `其中` / `表示` / `为` definition contexts.
 - A document with formulas/symbols was edited without a formula discovery pass and a LaTeX source list/registry.

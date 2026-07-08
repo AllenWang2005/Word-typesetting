@@ -3,6 +3,19 @@
 All notable changes to this skill are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and the project uses semantic versioning.
 
+## [1.6.1] - 2026-07-08
+
+### Fixed
+- Auditor: `TABLE_BORDERS` / `TABLE_RULES` now inspect row-level table property
+  exceptions (`w:tblPrEx/w:tblBorders`). This closes the real-world failure where
+  a document rendered a full grid because every row carried exception borders,
+  while the audit only inspected table-level `tblBorders`, style borders, and
+  cell-level `tcBorders`.
+- Normalizer: `normalize_docx --tables` now removes row-level exception borders
+  so the delivery gate can safely clean hidden table grids before auditing.
+- Tests: added regression coverage for row-exception table grids, body-cell
+  bottom borders, and allowed last-row bottom rules.
+
 ## [1.6.0] - 2026-07-08
 
 Driven by a third real-world failure (Codex delivered gridded tables, italic
@@ -113,6 +126,7 @@ paragraph ends as (italic) duplicates instead of replacing the original text in 
 ### Added
 - Initial release: the written standard (`SKILL.md` + `references/`), the `audit_docx_format.py` guardrail (punctuation, headings, fonts, captions, tables, citations, formulas; `--json` output and a FAIL/WARN summary), the `normalize_docx.py` safe auto-fixer, a non-compliant example, standard-library unit tests, and GitHub Actions CI.
 
+[1.6.1]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.6.1
 [1.6.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.6.0
 [1.5.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.5.0
 [1.4.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.4.0

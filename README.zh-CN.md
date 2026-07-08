@@ -128,7 +128,7 @@ python scripts/audit_docx_format.py path/to/report.docx --json   # 机器可读
 | `TABLE_SIZE` | FAIL | 表内文字或表内公式非五号/10.5 pt(小四亦可;不得大于正文) |
 | `TABLE_BORDERS` | FAIL | 表格有竖线/内部网格,含引用的表格样式画出来的网格 |
 | `TABLE_SHADING` | FAIL | 表格/单元格带底纹,含表格样式 `firstRow` 条件格式带来的表头底纹(三线表必须白底) |
-| `TABLE_RULES` | FAIL | 三线不对:顶/底线缺失、行间横线、或表头下线不比顶/底线细 |
+| `TABLE_RULES` | FAIL | 三线不对:顶/底线缺失、行间横线（含 `tblPrEx` 行级例外边框和表体单元格逐行底边线）、或表头下线不比顶/底线细 |
 | `TABLE_HEADER_REPEAT` | WARN | 多行表格表头未设跨页重复(`w:tblHeader`) |
 | `CAPTION_POSITION` | WARN | 表题在表下 / 图题在图上 |
 | `CAPTION_ALIGN` | FAIL | 表题/图题段落没有居中 |

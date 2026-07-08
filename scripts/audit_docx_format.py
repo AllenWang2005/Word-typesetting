@@ -682,10 +682,34 @@ def audit_table_rules(
                 "sit between the top and bottom rules.",
                 counts,
             )
+        rows = table.findall("w:tr", NS)
+        for row_offset, row in enumerate(rows, start=1):
+            is_first_row = row_offset == 1
+            is_last_row = row_offset == len(rows)
+            row_borders = row.find("w:tblPrEx/w:tblBorders", NS)
+            if row_borders is None:
+                continue
+            visible_horizontal = []
+            if border_is_visible(row_borders.find("w:insideH", NS)):
+                visible_horizontal.append("insideH")
+            if not is_first_row and border_is_visible(row_borders.find("w:top", NS)):
+                visible_horizontal.append("top")
+            if not is_last_row and border_is_visible(row_borders.find("w:bottom", NS)):
+                visible_horizontal.append("bottom")
+            if visible_horizontal:
+                add_issue(
+                    issues,
+                    "FAIL",
+                    "TABLE_RULES",
+                    f"Table {table_index} has row-exception horizontal borders on row {row_offset} "
+                    f"({', '.join(sorted(set(visible_horizontal)))}); clear w:tblPrEx/w:tblBorders for "
+                    "a true three-line table.",
+                    counts,
+                )
+                break
         top_size = border_size(top)
         if top_size is None:
             continue
-        rows = table.findall("w:tr", NS)
         if not rows:
             continue
         header_sizes = []
@@ -704,6 +728,33 @@ def audit_table_rules(
                 "w:sz≈6 vs top/bottom w:sz≈12.",
                 counts,
             )
+        # Cell-level bottom borders on body rows create a visible horizontal
+        # grid even when the table-level insideH border is set to none.
+        for row_offset, row in enumerate(rows[1:], start=2):
+            is_last_row = row_offset == len(rows)
+            for cell_borders in row.findall("w:tc/w:tcPr/w:tcBorders", NS):
+                visible_horizontal = []
+                for tag in ("top", "insideH"):
+                    rule = cell_borders.find(f"w:{tag}", NS)
+                    if border_is_visible(rule):
+                        visible_horizontal.append(tag)
+                bottom_rule = cell_borders.find("w:bottom", NS)
+                if border_is_visible(bottom_rule) and not is_last_row:
+                    visible_horizontal.append("bottom")
+                if visible_horizontal:
+                    add_issue(
+                        issues,
+                        "FAIL",
+                        "TABLE_RULES",
+                        f"Table {table_index} has cell-level horizontal borders on body row {row_offset} "
+                        f"({', '.join(sorted(set(visible_horizontal)))}); a three-line table may only have "
+                        "top, header, and bottom rules.",
+                        counts,
+                    )
+                    break
+            else:
+                continue
+            break
 
 
 def audit_table_borders(
@@ -721,6 +772,7 @@ def audit_table_borders(
     style_map = build_style_map(styles_root)
     for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
         sources = [table.find("w:tblPr/w:tblBorders", NS)]
+        sources.extend(table.findall(".//w:tblPrEx/w:tblBorders", NS))
         sources.extend(table.findall(".//w:tc/w:tcPr/w:tcBorders", NS))
         flagged = False
         for borders in sources:
