@@ -3,6 +3,24 @@
 All notable changes to this skill are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and the project uses semantic versioning.
 
+## [1.6.0] - 2026-07-08
+
+Driven by a third real-world failure (Codex delivered gridded tables, italic
+formula digits, and unnumbered/unreferenced equations — and the audit "passed"):
+prose rules are not executed, and **WARN does not stop delivery**. This release
+makes the gate actually gate.
+
+### Added
+- `scripts/finalize_docx.py` — the mandatory one-command delivery gate: applies every safe mechanical fix in place (`normalize_docx --all` equivalent), runs the full audit, and prints `DELIVERY GATE: PASS/FAIL` with a non-zero exit on FAIL. `SKILL.md` now requires running it and pasting the verdict into the delivery note; `agents/openai.yaml`'s default prompt tells the agent not to deliver without a PASS.
+- Auditor checks: `EQUATION_UNNUMBERED` (FAIL — a display equation with no chapter number `(3-1)`) and `EQUATION_NOT_REFERENCED` (WARN — a numbered equation never cited in prose as 由式 (3-1) 可得). Previously the auditor only checked the *layout* of numbers that existed; equations with no number at all were invisible.
+- `TABLE_BORDERS` now resolves the referenced table style's `basedOn` chain, so grids drawn by a style (e.g. Table Grid, invisible in document.xml) are caught — this is how "所有表格都不是三线表" passed the audit.
+
+### Changed
+- **Severity promotions — every Must-Fix rule is now FAIL level** so it blocks the gate: `TABLE_BORDERS`, `TABLE_RULES`, `FORMULA_DIGIT_ITALIC`, `FORMULA_MULTILETTER_ITALIC`, `EQUATION_NUMBER_CENTER`, `EQUATION_NUMBER_TABS`, and `CAPTION_ALIGN` were WARN (the audit reported them but still said "pass" and exited 0).
+- Must-Fix Audit gained the equation numbering/reference item; the audit-script item now names the delivery gate. Standard version → 2026-07-08. 12 new tests (136 total).
+
+
+
 ## [1.5.0] - 2026-07-07
 
 Direction set by the blind-spot review: invest in executable tooling, not longer
@@ -95,6 +113,7 @@ paragraph ends as (italic) duplicates instead of replacing the original text in 
 ### Added
 - Initial release: the written standard (`SKILL.md` + `references/`), the `audit_docx_format.py` guardrail (punctuation, headings, fonts, captions, tables, citations, formulas; `--json` output and a FAIL/WARN summary), the `normalize_docx.py` safe auto-fixer, a non-compliant example, standard-library unit tests, and GitHub Actions CI.
 
+[1.6.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.6.0
 [1.5.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.5.0
 [1.4.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.4.0
 [1.3.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.3.0

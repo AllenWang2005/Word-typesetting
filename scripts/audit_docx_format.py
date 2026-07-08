@@ -73,6 +73,7 @@ SPACE_BEFORE_ATTACHED_UNIT_RE = re.compile(r"\d[  　\t]+(?:%|℃|°C|°(?![CF]
 CAPTION_NUMBER_RE = re.compile(r"^(图|表)\s*(\d+(?:[-–—.]\d+)?)")
 # A display-equation number such as (3-3) or (式 3-3).
 EQUATION_NUMBER_RE = re.compile(r"[(（]\s*(?:式\s*)?\d+\s*[-–—]\s*\d+\s*[)）]")
+EQUATION_NUMBER_CAPTURE_RE = re.compile(r"[(（]\s*(?:式\s*)?(\d+)\s*[-–—]\s*(\d+)\s*[)）]")
 CN_BIB_HEADING_RE = re.compile(r"^(?:第?[一二三四五六七八九十0-9]+(?:章|节)?[、.．]?)?(参考文献|参考资料)$")
 EN_BIB_HEADING_RE = re.compile(r"^(?:\d+[.)]?)?references$", re.I)
 VISIBLE_LATEX_RE = re.compile(r"\\(?:frac|sqrt|sum|prod|int|begin|mathrm|text|sin|exp|lg|max)|[_^]\{")
@@ -654,7 +655,7 @@ def audit_table_rules(
         if borders is None:
             add_issue(
                 issues,
-                "WARN",
+                "FAIL",
                 "TABLE_RULES",
                 f"Table {table_index} has no explicit table borders; a three-line table needs visible thick "
                 "top/bottom rules (w:sz≈12) and a thin header rule (w:sz≈6) set explicitly.",
@@ -666,7 +667,7 @@ def audit_table_rules(
         if not border_is_visible(top) or not border_is_visible(bottom):
             add_issue(
                 issues,
-                "WARN",
+                "FAIL",
                 "TABLE_RULES",
                 f"Table {table_index} is missing a visible top or bottom rule; both must exist and be the "
                 "thick rules (w:sz≈12) of the three-line table.",
@@ -675,7 +676,7 @@ def audit_table_rules(
         if border_is_visible(borders.find("w:insideH", NS)):
             add_issue(
                 issues,
-                "WARN",
+                "FAIL",
                 "TABLE_RULES",
                 f"Table {table_index} has row-to-row horizontal borders (insideH); only the header rule may "
                 "sit between the top and bottom rules.",
@@ -697,7 +698,7 @@ def audit_table_rules(
         if header_sizes and max(header_sizes) >= top_size:
             add_issue(
                 issues,
-                "WARN",
+                "FAIL",
                 "TABLE_RULES",
                 f"Table {table_index}'s header rule is not thinner than its top/bottom rules; expected header "
                 "w:sz≈6 vs top/bottom w:sz≈12.",
@@ -705,20 +706,54 @@ def audit_table_rules(
             )
 
 
-def audit_table_borders(root: ET.Element, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:
-    """Warn when a table has visible vertical/inner borders instead of a three-line layout."""
+def audit_table_borders(
+    root: ET.Element,
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+    styles_root: Optional[ET.Element] = None,
+) -> None:
+    """FAIL when a table has visible vertical/inner borders instead of a three-line layout.
+
+    Checks both direct borders in document.xml and borders contributed by the
+    referenced table style (a gridded style such as Table Grid draws its lines
+    from styles.xml, invisible to a document-only scan).
+    """
+    style_map = build_style_map(styles_root)
     for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
         sources = [table.find("w:tblPr/w:tblBorders", NS)]
         sources.extend(table.findall(".//w:tc/w:tcPr/w:tcBorders", NS))
+        flagged = False
         for borders in sources:
             if borders is None:
                 continue
             if any(border_is_visible(borders.find(f"w:{tag}", NS)) for tag in VERTICAL_BORDER_TAGS):
                 add_issue(
                     issues,
-                    "WARN",
+                    "FAIL",
                     "TABLE_BORDERS",
                     f"Table {table_index} has vertical/inner borders; use a white three-line table (top, header, bottom rules only).",
+                    counts,
+                )
+                flagged = True
+                break
+        if flagged:
+            continue
+        style_id = table_style_id(table)
+        if not style_id:
+            continue
+        for style in style_chain(style_id, style_map):
+            style_sources = style.findall(".//w:tblBorders", NS) + style.findall(".//w:tcBorders", NS)
+            if any(
+                border_is_visible(borders.find(f"w:{tag}", NS))
+                for borders in style_sources
+                for tag in VERTICAL_BORDER_TAGS
+            ):
+                add_issue(
+                    issues,
+                    "FAIL",
+                    "TABLE_BORDERS",
+                    f"Table {table_index} references table style '{style_id}' which draws vertical/inner grid "
+                    "borders; remove the style reference and set explicit three-line borders.",
                     counts,
                 )
                 break
@@ -884,7 +919,7 @@ def audit_formula_digit_italics(root: ET.Element, issues: list[Issue], counts: O
             if run_is_italic(run) and FORMULA_DIGIT_OPERATOR_RE.search(text):
                 add_issue(
                     issues,
-                    "WARN",
+                    "FAIL",
                     "FORMULA_DIGIT_ITALIC",
                     f"A number/operator in a formula is italic ('{text.strip()[:20]}'); digits and operators must be upright, only variables italic.",
                     counts,
@@ -913,7 +948,7 @@ def audit_formula_multiletter_italics(
             if not math_run_is_upright(run):
                 add_issue(
                     issues,
-                    "WARN",
+                    "FAIL",
                     "FORMULA_MULTILETTER_ITALIC",
                     f"Formula run '{text.strip()[:20]}' has 2+ adjacent letters at OMML's default italic; "
                     "units/functions need an explicit upright style (m:sty val=\"p\", LaTeX \\mathrm), and a "
@@ -972,7 +1007,7 @@ def audit_caption_alignment(
             continue
         add_issue(
             issues,
-            "WARN",
+            "FAIL",
             "CAPTION_ALIGN",
             f"Caption paragraph {index} is not centered: {text[:60]}",
             counts,
@@ -1077,7 +1112,7 @@ def audit_equation_numbers(
         if EQUATION_NUMBER_RE.search(text) and paragraph_alignment(paragraph) == "center":
             add_issue(
                 issues,
-                "WARN",
+                "FAIL",
                 "EQUATION_NUMBER_CENTER",
                 "Paragraph {0} centers a numbered formula; the number should be right-aligned "
                 "(left-aligned paragraph with a center tab for the equation and a right tab for the number): {1}".format(
@@ -1136,7 +1171,7 @@ def audit_equation_number_tabs(
         if not any(w_attr(tab, "val") == "right" for tab in tabs):
             add_issue(
                 issues,
-                "WARN",
+                "FAIL",
                 "EQUATION_NUMBER_TABS",
                 f"Paragraph {index} numbers a display equation but has no right tab stop; use a "
                 "left-aligned paragraph with a center tab (equation) and a right tab (number): "
@@ -1233,6 +1268,74 @@ def audit_package_integrity(docx_path: Path, issues: list[Issue], counts: Option
                     add_issue(issues, "FAIL", "PACKAGE_INTEGRITY", f"{rels} is not well-formed XML.", counts)
     except (zipfile.BadZipFile, OSError) as exc:
         add_issue(issues, "FAIL", "PACKAGE_INTEGRITY", f"Cannot read package: {exc}", counts)
+
+
+
+
+def is_display_equation(paragraph: ET.Element, text: str) -> bool:
+    """True for an equation that stands as its own line (not inline in prose)."""
+    if paragraph.find(".//m:oMathPara", NS) is not None:
+        return True
+    if paragraph.find(".//m:oMath", NS) is None:
+        return False
+    residue = EQUATION_NUMBER_RE.sub("", text).strip()
+    return residue == ""
+
+
+def audit_equation_numbering(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """FAIL when a display equation has no chapter equation number.
+
+    The standard numbers every display formula by chapter — `(3-1)` right-aligned
+    on the equation line — and references it in prose. An equation line without
+    any number cannot be referenced at all.
+    """
+    for index, paragraph in enumerate(paragraphs, start=1):
+        text = paragraph_text(paragraph)
+        if not is_display_equation(paragraph, text):
+            continue
+        if not EQUATION_NUMBER_RE.search(text):
+            add_issue(
+                issues,
+                "FAIL",
+                "EQUATION_UNNUMBERED",
+                f"Paragraph {index} is a display equation without a chapter number; add a right-aligned "
+                "number such as (3-1) (replace_math.py's display mode does this).",
+                counts,
+            )
+
+
+def audit_equation_references(
+    paragraphs: list[ET.Element],
+    issues: list[Issue],
+    counts: Optional[dict[tuple[str, str], int]] = None,
+) -> None:
+    """WARN when a numbered equation is never referenced in the text.
+
+    Every numbered formula should be cited in prose, e.g. 由式 (3-1) 可得 /
+    按式 (3-1) 计算.
+    """
+    texts = [paragraph_text(p) for p in paragraphs]
+    for index, (paragraph, text) in enumerate(zip(paragraphs, texts)):
+        if paragraph.find(".//m:oMath", NS) is None and paragraph.find(".//m:oMathPara", NS) is None:
+            continue
+        if not is_display_equation(paragraph, text):
+            continue
+        for match in EQUATION_NUMBER_CAPTURE_RE.finditer(text):
+            chapter, number = match.group(1), match.group(2)
+            reference = re.compile(rf"式\s*[(（]?\s*{chapter}\s*[-–—]\s*{number}(?!\d)")
+            if not any(reference.search(other) for j, other in enumerate(texts) if j != index):
+                add_issue(
+                    issues,
+                    "WARN",
+                    "EQUATION_NOT_REFERENCED",
+                    f"式 ({chapter}-{number}) is never referenced in the text; cite it in prose, "
+                    f"e.g. 由式 ({chapter}-{number}) 可得 / 按式 ({chapter}-{number}) 计算.",
+                    counts,
+                )
 
 
 def load_part(docx_path: Path, name: str) -> Optional[str]:
@@ -1341,7 +1444,7 @@ def main() -> int:
     audit_heading_styles(paragraphs[:bib_index], issues, issue_counts)
     audit_fonts(paragraphs[:bib_index], issues, issue_counts)
     audit_tables(root, issues, issue_counts)
-    audit_table_borders(root, issues, issue_counts)
+    audit_table_borders(root, issues, issue_counts, styles_root)
     audit_table_shading(root, issues, issue_counts, styles_root)
     audit_table_rules(root, issues, issue_counts, styles_root)
     audit_table_header_repeat(root, issues, issue_counts)
@@ -1360,6 +1463,8 @@ def main() -> int:
     audit_number_unit_spacing(paragraphs[:bib_index], issues, issue_counts)
     audit_equation_numbers(paragraphs[:bib_index], issues, issue_counts)
     audit_equation_number_tabs(paragraphs[:bib_index], issues, issue_counts)
+    audit_equation_numbering(paragraphs, issues, issue_counts)
+    audit_equation_references(paragraphs, issues, issue_counts)
     audit_fields_update(document_xml, settings_xml, issues, issue_counts)
     audit_firstline_indent_unit(paragraphs[:bib_index], issues, issue_counts)
 

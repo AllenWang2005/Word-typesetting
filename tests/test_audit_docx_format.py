@@ -898,6 +898,93 @@ class PackageIntegrityTests(unittest.TestCase):
         self.assertNotIn("PACKAGE_INTEGRITY", codes(issues))
 
 
+class TableStyleGridTests(unittest.TestCase):
+    def test_style_driven_grid_borders_flagged_as_fail(self):
+        # Grid borders live in styles.xml (e.g. Table Grid); document.xml shows
+        # only the style reference — exactly how "所有表格都不是三线表" slipped through.
+        styles = ET.fromstring(
+            f'<w:styles xmlns:w="{W}">'
+            f'<w:style w:type="table" w:styleId="TableGrid"><w:tblPr><w:tblBorders>'
+            f'<w:insideV w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/>'
+            f"</w:tblBorders></w:tblPr></w:style></w:styles>"
+        )
+        root = make_doc(
+            '<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/></w:tblPr>'
+            "<w:tr><w:tc><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"
+        )
+        issues = []
+        aud.audit_table_borders(root, issues, styles_root=styles)
+        self.assertIn("TABLE_BORDERS", codes(issues))
+        self.assertEqual([i.severity for i in issues if i.code == "TABLE_BORDERS"], ["FAIL"])
+
+    def test_plain_style_reference_not_flagged(self):
+        styles = ET.fromstring(
+            f'<w:styles xmlns:w="{W}"><w:style w:type="table" w:styleId="TableNormal"/></w:styles>'
+        )
+        root = make_doc(
+            '<w:tbl><w:tblPr><w:tblStyle w:val="TableNormal"/></w:tblPr>'
+            "<w:tr><w:tc><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"
+        )
+        issues = []
+        aud.audit_table_borders(root, issues, styles_root=styles)
+        self.assertNotIn("TABLE_BORDERS", codes(issues))
+
+
+class MustFixSeverityTests(unittest.TestCase):
+    def test_table_rules_and_digit_italic_are_fail_level(self):
+        # Must-Fix items must block the gate: WARN does not stop delivery.
+        issues = []
+        aud.audit_table_rules(make_doc(TABLE_XML), issues)
+        self.assertEqual({i.severity for i in issues if i.code == "TABLE_RULES"}, {"FAIL"})
+        math_ns = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+        root = ET.fromstring(
+            f'<w:document xmlns:w="{W}" xmlns:m="{math_ns}"><w:body><w:p><m:oMath>'
+            f'<m:r><w:rPr><w:i/></w:rPr><m:t>44.5</m:t></m:r></m:oMath></w:p></w:body></w:document>'
+        )
+        issues = []
+        aud.audit_formula_digit_italics(root, issues)
+        self.assertEqual({i.severity for i in issues if i.code == "FORMULA_DIGIT_ITALIC"}, {"FAIL"})
+
+
+class EquationNumberingTests(unittest.TestCase):
+    MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+
+    def _eq_p(self, trailing_text: str) -> ET.Element:
+        run = f'<w:r><w:t xml:space="preserve">{trailing_text}</w:t></w:r>' if trailing_text else ""
+        return ET.fromstring(
+            f'<w:p xmlns:w="{W}" xmlns:m="{self.MATH_NS}">'
+            f"<m:oMath><m:r><m:t>W=0.278KFP</m:t></m:r></m:oMath>{run}</w:p>"
+        )
+
+    def test_unnumbered_display_equation_flagged(self):
+        issues = []
+        aud.audit_equation_numbering([self._eq_p("")], issues)
+        self.assertIn("EQUATION_UNNUMBERED", codes(issues))
+        self.assertEqual([i.severity for i in issues if i.code == "EQUATION_UNNUMBERED"], ["FAIL"])
+
+    def test_numbered_display_equation_ok(self):
+        issues = []
+        aud.audit_equation_numbering([self._eq_p("(3-1)")], issues)
+        self.assertNotIn("EQUATION_UNNUMBERED", codes(issues))
+
+    def test_inline_equation_in_prose_not_flagged(self):
+        issues = []
+        aud.audit_equation_numbering([self._eq_p("为设计洪峰流量计算式。")], issues)
+        self.assertNotIn("EQUATION_UNNUMBERED", codes(issues))
+
+    def test_numbered_but_never_referenced_warned(self):
+        issues = []
+        paragraphs = [self._eq_p("(3-1)"), make_p("后续正文没有提到该公式。")]
+        aud.audit_equation_references(paragraphs, issues)
+        self.assertIn("EQUATION_NOT_REFERENCED", codes(issues))
+
+    def test_referenced_equation_ok(self):
+        issues = []
+        paragraphs = [self._eq_p("(3-1)"), make_p("由式 (3-1) 可得设计洪峰流量。")]
+        aud.audit_equation_references(paragraphs, issues)
+        self.assertNotIn("EQUATION_NOT_REFERENCED", codes(issues))
+
+
 class SummaryTests(unittest.TestCase):
     def test_omitted_issue_count_reported(self):
         issues = []

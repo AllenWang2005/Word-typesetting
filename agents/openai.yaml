@@ -1,4 +1,4 @@
 interface:
   display_name: "Word Report Formatting"
   short_description: "Word report formatting with LaTeX-to-OMML formulas"
-  default_prompt: "Use $word-report-formatting to format this Word report according to Allen's report standard."
+  default_prompt: "Use $word-report-formatting to format this Word report according to Allen's report standard. Before delivering, run python scripts/finalize_docx.py <docx> and do not deliver unless it prints DELIVERY GATE: PASS."

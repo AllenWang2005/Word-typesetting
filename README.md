@@ -134,12 +134,12 @@ with a `FAIL/WARN` summary, and notes any per-code truncation. Checks include:
 | `HEADING_FONT` / `BODY_FONT` | WARN | Heading in Songti / body in Heiti (direct fonts only) |
 | `HEADING_NO_STYLE` | WARN | Heading-looking line that uses no Word heading style |
 | `TABLE_SIZE` | FAIL | Table text or in-table formula not 五号/10.5 pt (小四 ok; never larger than body) |
-| `TABLE_BORDERS` | WARN | Table has vertical/inner borders (not a three-line table) |
+| `TABLE_BORDERS` | FAIL | Table has vertical/inner borders, incl. grids drawn by the referenced table style |
 | `TABLE_SHADING` | FAIL | Table/cell shading, direct or from the table style's `firstRow` format (three-line tables are white) |
-| `TABLE_RULES` | WARN | Missing/wrong three-line rules: no visible top/bottom rules, row-to-row insideH, or header rule not thinner |
+| `TABLE_RULES` | FAIL | Missing/wrong three-line rules: no visible top/bottom rules, row-to-row insideH, or header rule not thinner |
 | `TABLE_HEADER_REPEAT` | WARN | Multi-row table header not set to repeat across pages (`w:tblHeader`) |
 | `CAPTION_POSITION` | WARN | Table caption below table / figure caption above figure |
-| `CAPTION_ALIGN` | WARN | A 表/图 caption paragraph is not centered |
+| `CAPTION_ALIGN` | FAIL | A 表/图 caption paragraph is not centered |
 | `FLOAT_ORDER` | WARN | Figure/table placed before its first in-text reference |
 | `COLOR` | WARN | Stray non-black font color (hyperlinks/theme colors excluded) |
 | `CITATION_BRACKETS` | FAIL | Full-width citation brackets `［1］` |
@@ -148,12 +148,14 @@ with a `FAIL/WARN` summary, and notes any per-code truncation. Checks include:
 | `VISIBLE_LATEX` | FAIL | Visible LaTeX source instead of OMML |
 | `FORMULA_TEXT` | FAIL/WARN | Plain-text formula / quantity symbol that should be OMML |
 | `MATH_DUPLICATE` | FAIL | Rendered OMML whose text still exists as plain text in the same paragraph (append-instead-of-replace) |
-| `FORMULA_DIGIT_ITALIC` | WARN | A number/operator in a formula is italic, incl. mixed runs like an italic `F=44.5` |
-| `FORMULA_MULTILETTER_ITALIC` | WARN | 2+ adjacent letters in a formula at OMML's default italic (unit/function needs `m:sty="p"`; `CI`-style coefficient needs splitting) |
+| `FORMULA_DIGIT_ITALIC` | FAIL | A number/operator in a formula is italic, incl. mixed runs like an italic `F=44.5` |
+| `FORMULA_MULTILETTER_ITALIC` | FAIL | 2+ adjacent letters in a formula at OMML's default italic (unit/function needs `m:sty="p"`; `CI`-style coefficient needs splitting) |
 | `MANUAL_ITALIC_MATH` | FAIL | An italicized plain-text pseudo-formula (e.g. italic `F = 44.5 km²`) instead of OMML |
 | `NUMBER_UNIT_SPACING` | WARN | `20km` glued (needs `20 km`) or a space before `%`/`°`/`℃` |
-| `EQUATION_NUMBER_CENTER` | WARN | A numbered display formula is centered (the number should be right-aligned) |
-| `EQUATION_NUMBER_TABS` | WARN | A numbered display formula has no right tab stop for its number |
+| `EQUATION_NUMBER_CENTER` | FAIL | A numbered display formula is centered (the number should be right-aligned) |
+| `EQUATION_NUMBER_TABS` | FAIL | A numbered display formula has no right tab stop for its number |
+| `EQUATION_UNNUMBERED` | FAIL | A display equation has no chapter number `(3-1)` |
+| `EQUATION_NOT_REFERENCED` | WARN | A numbered equation is never cited in prose (由式 (3-1) 可得) |
 | `FORMULA_TEXT_TABLE` | WARN | Plain-text formula/symbol inside a table cell that should be OMML |
 | `FIELDS_UPDATE` | WARN | TOC/REF fields present but `w:updateFields` unset (results may be stale) |
 | `FIRSTLINE_FIXED` | WARN | First-line indent in fixed twips instead of characters (`firstLineChars`) |
@@ -179,6 +181,18 @@ shading, zero `w:tblLook`, repeat header rows across pages), `--update-fields`
 ```text
 python scripts/normalize_docx.py report.docx -o report.fixed.docx
 python scripts/normalize_docx.py report.docx --all --in-place
+```
+
+## The delivery gate
+
+`scripts/finalize_docx.py` is the one command to run before delivering: it applies
+every safe mechanical fix in place, runs the full audit, and prints
+`DELIVERY GATE: PASS/FAIL` (non-zero exit on FAIL). Every Must-Fix rule is enforced
+at FAIL level, so a FAIL verdict blocks delivery:
+
+```text
+python scripts/finalize_docx.py report.docx            # fix + audit + verdict
+python scripts/finalize_docx.py report.docx --no-fix   # audit only
 ```
 
 ## The formula replacement script
@@ -226,6 +240,7 @@ CI runs `py_compile` plus the test suite on Python 3.9 and 3.12 on every push
 │   ├── citation-crossrefs-ooxml.md             # in-text REF cross-reference OOXML
 │   └── three-line-table-ooxml.md               # three-line table OOXML recipe
 ├── scripts/
+│   ├── finalize_docx.py                        # delivery gate: fix + audit + verdict
 │   ├── replace_math.py                         # LaTeX→OMML in-place formula replacement
 │   ├── audit_docx_format.py                    # read-only guardrail
 │   └── normalize_docx.py                       # safe auto-fixer
@@ -236,6 +251,7 @@ CI runs `py_compile` plus the test suite on Python 3.9 and 3.12 on every push
 │   └── sample-compliant-audit-output.txt
 └── tests/
     ├── test_audit_docx_format.py
+    ├── test_finalize_docx.py
     ├── test_normalize_docx.py
     └── test_replace_math.py
 ```
