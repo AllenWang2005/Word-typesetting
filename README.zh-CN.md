@@ -126,12 +126,12 @@ python scripts/audit_docx_format.py path/to/report.docx --json   # 机器可读
 | `HEADING_FONT` / `BODY_FONT` | WARN | 一二级标题用了宋体 / 正文用了黑体(仅查直接字体) |
 | `HEADING_NO_STYLE` | WARN | 看着像标题但没用 Word 标题样式 |
 | `TABLE_SIZE` | FAIL | 表内文字或表内公式非五号/10.5 pt(小四亦可;不得大于正文) |
-| `TABLE_BORDERS` | WARN | 表格有竖线/内部网格(非三线表) |
+| `TABLE_BORDERS` | FAIL | 表格有竖线/内部网格,含引用的表格样式画出来的网格 |
 | `TABLE_SHADING` | FAIL | 表格/单元格带底纹,含表格样式 `firstRow` 条件格式带来的表头底纹(三线表必须白底) |
-| `TABLE_RULES` | WARN | 三线不对:顶/底线缺失、行间横线、或表头下线不比顶/底线细 |
+| `TABLE_RULES` | FAIL | 三线不对:顶/底线缺失、行间横线、或表头下线不比顶/底线细 |
 | `TABLE_HEADER_REPEAT` | WARN | 多行表格表头未设跨页重复(`w:tblHeader`) |
 | `CAPTION_POSITION` | WARN | 表题在表下 / 图题在图上 |
-| `CAPTION_ALIGN` | WARN | 表题/图题段落没有居中 |
+| `CAPTION_ALIGN` | FAIL | 表题/图题段落没有居中 |
 | `FLOAT_ORDER` | WARN | 图/表出现在正文首次引用之前(应先引用后出现) |
 | `COLOR` | WARN | 多余的非黑色字体(已排除超链接/主题色) |
 | `CITATION_BRACKETS` | FAIL | 全角引用括号 `［1］` |
@@ -140,12 +140,14 @@ python scripts/audit_docx_format.py path/to/report.docx --json   # 机器可读
 | `VISIBLE_LATEX` | FAIL | 残留可见 LaTeX 源码而非 OMML |
 | `FORMULA_TEXT` | FAIL/WARN | 本应是 OMML 的纯文本公式/量符号 |
 | `MATH_DUPLICATE` | FAIL | 公式对象的内容仍以纯文本形式留在同一段落(追加而非原位替换) |
-| `FORMULA_DIGIT_ITALIC` | WARN | 公式里的数字/运算符被斜体,含斜体 `F=44.5` 这类混合 run |
-| `FORMULA_MULTILETTER_ITALIC` | WARN | 公式里 2+ 相邻字母停留在 OMML 默认斜体(单位/函数名需 `m:sty="p"` 正体;`CI` 式系数需拆开) |
+| `FORMULA_DIGIT_ITALIC` | FAIL | 公式里的数字/运算符被斜体,含斜体 `F=44.5` 这类混合 run |
+| `FORMULA_MULTILETTER_ITALIC` | FAIL | 公式里 2+ 相邻字母停留在 OMML 默认斜体(单位/函数名需 `m:sty="p"` 正体;`CI` 式系数需拆开) |
 | `MANUAL_ITALIC_MATH` | FAIL | 用普通文本手工斜体冒充公式(如斜体 `F = 44.5 km²`) |
 | `NUMBER_UNIT_SPACING` | WARN | 数字与单位粘连(`20km` 应为 `20 km`),或 `%`/`°`/`℃` 前多了空格 |
-| `EQUATION_NUMBER_CENTER` | WARN | 带编号的独立公式整体居中(编号应靠右) |
-| `EQUATION_NUMBER_TABS` | WARN | 带编号的独立公式没有右对齐制表位放编号 |
+| `EQUATION_NUMBER_CENTER` | FAIL | 带编号的独立公式整体居中(编号应靠右) |
+| `EQUATION_NUMBER_TABS` | FAIL | 带编号的独立公式没有右对齐制表位放编号 |
+| `EQUATION_UNNUMBERED` | FAIL | 独立公式没有按章编号 `(3-1)` |
+| `EQUATION_NOT_REFERENCED` | WARN | 公式编号从未在正文中被引用(应写"由式 (3-1) 可得") |
 | `FORMULA_TEXT_TABLE` | WARN | 表格单元格里残留本应是 OMML 的纯文本公式/符号 |
 | `FIELDS_UPDATE` | WARN | 有 TOC/REF 域但未设 `w:updateFields`(域结果可能过期) |
 | `FIRSTLINE_FIXED` | WARN | 首行缩进用固定 twip 而非字符(`firstLineChars`) |
@@ -165,6 +167,15 @@ python scripts/normalize_docx.py report.docx --all --in-place
 ```
 
 它**不会**改字体、样式或交叉引用——那些需要判断,留给模型 + 主规范;公式用下面的专用脚本。
+
+## 交付门禁
+
+`scripts/finalize_docx.py` 是交付前必须运行的唯一命令:原地应用全部安全机械修复、跑完整审计、给出 `DELIVERY GATE: PASS/FAIL` 判定(FAIL 时退出码非零)。所有 Must-Fix 规则都是 FAIL 级,门禁 FAIL 就不许交付:
+
+```text
+python scripts/finalize_docx.py report.docx            # 修复 + 审计 + 判定
+python scripts/finalize_docx.py report.docx --no-fix   # 只审计不改文件
+```
 
 ## 公式替换脚本
 
@@ -203,6 +214,7 @@ python -m unittest discover -s tests -v
 │   └── three-line-table-ooxml.md               # 三线表 OOXML 实现配方
 ├── scripts/
 │   ├── audit_docx_format.py                    # 只读护栏
+│   ├── finalize_docx.py                        # 交付门禁:修复+审计+判定
 │   ├── normalize_docx.py                       # 安全自动修复
 │   └── replace_math.py                         # LaTeX→OMML 公式原位替换
 ├── examples/

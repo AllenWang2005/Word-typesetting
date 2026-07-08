@@ -9,7 +9,7 @@ description: Apply Allen's formal Word report formatting standard. Use when crea
 
 Use this skill to format formal Chinese Word reports consistently with Allen's preferred standard. It complements the general DOCX/document skill: use the document tooling for implementation and rendering, and use this skill for the required typography, formula, table, figure, reference/citation, and appendix-code rules.
 
-**Standard version: 2026-07-07.** Acceptance decisions: the standard follows GB norms (GB 3100/3101/3102, GB/T 15835, GB/T 7714) and applies to general formal documents; **MS Word is the canonical renderer** — when renderers disagree, what Word shows is what counts. The audit script is the primary completion gate; do **not** run PDF/page-image render passes unless the user explicitly asks (token cost) — a quick visual open in Word by the user replaces them.
+**Standard version: 2026-07-08.** Acceptance decisions: the standard follows GB norms (GB 3100/3101/3102, GB/T 15835, GB/T 7714) and applies to general formal documents; **MS Word is the canonical renderer** — when renderers disagree, what Word shows is what counts. The audit script is the primary completion gate; do **not** run PDF/page-image render passes unless the user explicitly asks (token cost) — a quick visual open in Word by the user replaces them.
 
 Detailed rules live in `references/`:
 
@@ -30,7 +30,7 @@ Detailed rules live in `references/`:
 5. For any document containing formulas, variables, quantity symbols, subscripts/superscripts, units, or math-like expressions, read `references/latex-omml-formula-workflow.md` and run a formula discovery pass before styling. This includes bare one-letter quantity symbols in definition/explanation prose, such as `式中 Q 为流量，N 为出力`.
 6. Write formulas, inline variables, math objects, and quantity symbols as LaTeX first, then render them into native Word OMML equations — preferably by building a JSON registry and running `scripts/replace_math.py` (deterministic Pandoc conversion + exact-position splice; its summary's `not_found`/`still_plain_text` must be empty). Every conversion is an **in-place replacement**: the OMML object goes exactly where the original token was and the original plain text is removed; never append rendered math at the end of a paragraph or merge adjacent expressions. Do not satisfy this standard by manually italicizing normal text. For brand-new documents prefer source-first authoring per `references/generate-from-source.md`.
 7. For paper-style citations, read `references/citation-crossrefs-ooxml.md` and convert body citations such as `[1]`, `[1][2]`, `[1,2]`, or `[1-3]` into superscript Word cross-references to the matching bibliography entries; format the bibliography entries themselves per `references/reference-style-gbt7714.md` (GB/T 7714).
-8. If editing an existing DOCX and Python is available, run `scripts/audit_docx_format.py <path-to-docx>` after formatting. Fix `FAIL` items and inspect `WARN` items; this script is a guardrail, not a substitute for visual QA. Use `scripts/normalize_docx.py` for the mechanical fixes: citation brackets and CJK punctuation (always on), plus `--units` (number-unit spacing), `--tables` (clear in-table shading, zero `w:tblLook`, repeat header rows), and `--update-fields` (Word refreshes TOC/REF fields on open); `--all` enables everything.
+8. **Mandatory delivery gate**: run `python scripts/finalize_docx.py <path-to-docx>` after formatting (it applies every safe mechanical fix — citation brackets, CJK punctuation, number-unit spacing, in-table shading, `w:tblLook`, header-row repeat, `w:updateFields` — then runs the full audit and prints a verdict). `DELIVERY GATE: FAIL` means the document must not be delivered; fix every `FAIL` and re-run until it passes, and copy the gate verdict plus the audit summary line into the delivery note. Every Must-Fix item is enforced at `FAIL` level — a `WARN`-only report passes the gate, so also read the WARN lines. If Python is unavailable, say so explicitly in the delivery note instead of implying the gate ran.
 9. Before delivery, run a formatting audit against the checklist in `references/formatting-standard.md`.
 10. Treat the Must-Fix Audit below as a completion gate: do not deliver or claim compliance while any must-fix item remains, and disclose any item that could not be verified in the current environment.
 11. Do not run PDF/page-image render inspections unless the user explicitly asks for one. The audit script plus the Must-Fix gate are the completion criteria; recommend that the user opens the delivered file once in MS Word (the canonical renderer) to spot-check layout, fonts, and formulas.
@@ -65,6 +65,7 @@ Fail the formatting pass and revise if any of these remain:
 - Body text, headings, captions, table text, or reference text contain unintended non-black color.
 - A table caption is not above its table, or a figure caption is not below its figure, or figure/table names are not centered.
 - Figures, tables, or equations are not numbered by chapter, or a figure/table appears before it is first referenced in the text.
+- A display equation has no chapter number `(3-1)`, or a numbered equation is never cited in prose (write “由式 (3-1) 可得” / “按式 (3-1) 计算”).
 - Level-1 Chinese headings do not have a blank-line visual gap before them when they follow body text, or a heading is stranded at the bottom of a page.
 - Table text is larger than the body or not the expected 五号/10.5 pt (小四/12 pt also accepted), unless the user or official template explicitly requires a different size.
 - A table has any cell shading / non-white fill (including header shading inherited from a table style's `firstRow` conditional format), or lacks visible thick top/bottom rules with a single thinner header rule.
@@ -74,7 +75,7 @@ Fail the formatting pass and revise if any of these remain:
 - A formula is blanket-italicized (digits/operators slanted), or a numbered display equation is centered instead of having a right-aligned number, or appendix code is not Times New Roman 小四.
 - Existing tables, formulas, variables, units, or symbols still violate the standard.
 - Body citations are only static superscript text instead of Word `REF` fields/bookmark cross-references, or a citation references only the bare number instead of the whole bracketed `[1]`, unless the user explicitly allows visual-only citations; or bibliography entries do not follow GB/T 7714—2015.
-- The available DOCX audit script reports `FAIL` items that have not been fixed or explicitly explained.
+- `scripts/finalize_docx.py` was not run, or its delivery gate reports `FAIL` items that have not been fixed or explicitly explained.
 
 ## Conflict Handling
 

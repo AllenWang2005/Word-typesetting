@@ -6,6 +6,8 @@ FAIL H1_CENTER: Level-1 heading is centered at paragraph 1: 一、绪论
 FAIL TABLE_SIZE: Table 1 has direct font size 28; expected 五号/10.5 pt (w:sz=21; 小四/24 also accepted).
 FAIL TABLE_SIZE: Table 1 has direct font size 28; expected 五号/10.5 pt (w:sz=21; 小四/24 also accepted).
 FAIL TABLE_SHADING: Table 1 has cell/table shading; a three-line table must be all white (clear every w:shd to val=clear fill=auto).
+FAIL TABLE_RULES: Table 1 has no explicit table borders; a three-line table needs visible thick top/bottom rules (w:sz≈12) and a thin header rule (w:sz≈6) set explicitly.
+FAIL CAPTION_ALIGN: Caption paragraph 10 is not centered: 表 1-1 方案比较结果
 FAIL CITATION_BRACKETS: Body citations use full-width or non-ASCII brackets.
 FAIL CITATION_FIELDS: Body citation patterns exist, but no Word REF ref_### cross-reference fields were found.
 FAIL FORMULA_TEXT: Paragraph 4 has likely formula/quantity-symbol text that should be LaTeX-rendered OMML: 式中 N_p 为水泵台数，反映系统的装机规模。
@@ -16,10 +18,8 @@ WARN H1_GAP: Level-1 heading may need a blank visual gap before it at paragraph 
 WARN HEADING_PUNCT: Heading ends with punctuation at paragraph 9: 二、研究方法。
 WARN HEADING_NO_STYLE: Paragraph 1 looks like a heading but uses no Word heading style (won't enter the TOC): 一、绪论
 WARN HEADING_FONT: Level-1/2 heading paragraph 9 uses a Songti font '宋体'; they should be Heiti.
-WARN TABLE_RULES: Table 1 has no explicit table borders; a three-line table needs visible thick top/bottom rules (w:sz≈12) and a thin header rule (w:sz≈6) set explicitly.
 WARN COLOR: Found direct font color FF0000; verify it is intentional. Body/captions/tables/references should be black.
 WARN CAPTION_POSITION: A table caption appears below its table; table captions belong above the table.
-WARN CAPTION_ALIGN: Caption paragraph 10 is not centered: 表 1-1 方案比较结果
 WARN CITATION_NO_BRACKETS: Paragraph 8 has a bare superscript number '3' with no brackets; a citation should be the whole bracketed [n], not a bare number.
 WARN FIRSTLINE_FIXED: Paragraph 2 indents its first line in fixed twips (w:firstLine) without w:firstLineChars; Chinese first-line indents should be character-based (2 字符 = firstLineChars="200") so they scale with the font size.
-Summary: FAIL=12 WARN=10 printed=22 omitted=0
+Summary: FAIL=14 WARN=8 printed=22 omitted=0

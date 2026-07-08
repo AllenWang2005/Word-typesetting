@@ -19,6 +19,6 @@ jobs:
       - name: Install Pandoc (for LaTeX→OMML round-trip tests)
         run: sudo apt-get update && sudo apt-get install -y pandoc
       - name: Byte-compile scripts
-        run: python -m py_compile scripts/audit_docx_format.py scripts/normalize_docx.py scripts/replace_math.py examples/make_sample.py
+        run: python -m py_compile scripts/audit_docx_format.py scripts/normalize_docx.py scripts/replace_math.py scripts/finalize_docx.py examples/make_sample.py
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
