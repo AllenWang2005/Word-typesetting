@@ -97,6 +97,22 @@ class InlineReplaceTests(unittest.TestCase):
         sizes = [n.get(f"{{{W}}}val") for n in root.iter(f"{{{W}}}sz")]
         self.assertEqual(sizes, ["21"])
 
+    def test_body_formula_default_size_is_xiaosi(self):
+        doc = make_document("<w:p><w:r><w:t>F=44.5</w:t></w:r></w:p>")
+        xml, _ = apply(doc, [{"find": "F=44.5", "omml": OMML}])
+        root = ET.fromstring(xml)
+        sizes = [n.get(f"{{{W}}}val") for n in root.iter(f"{{{W}}}sz")]
+        self.assertEqual(sizes, ["24"])
+
+    def test_table_formula_default_size_is_wuhao(self):
+        doc = make_document(
+            "<w:tbl><w:tr><w:tc><w:p><w:r><w:t>F=44.5</w:t></w:r></w:p></w:tc></w:tr></w:tbl>"
+        )
+        xml, _ = apply(doc, [{"find": "F=44.5", "omml": OMML}])
+        root = ET.fromstring(xml)
+        sizes = [n.get(f"{{{W}}}val") for n in root.iter(f"{{{W}}}sz")]
+        self.assertEqual(sizes, ["21"])
+
     def test_run_properties_preserved_on_split(self):
         doc = make_document(
             '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>前F=44.5后</w:t></w:r></w:p>'

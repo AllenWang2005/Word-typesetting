@@ -6,7 +6,8 @@ rules written in prose do not enforce themselves — the gate does:
 
 1. Applies every safe mechanical fix in place (``normalize_docx.py --all``):
    citation brackets, CJK punctuation, number-unit spacing, in-table shading,
-   ``w:tblLook`` flags, header-row repeat, ``w:updateFields``.
+   in-table OMML formula size (五号), ``w:tblLook`` flags, header-row repeat,
+   ``w:updateFields``.
 2. Runs ``audit_docx_format.py`` and prints its full report.
 3. Prints the verdict. **DELIVERY GATE: FAIL means the document must not be
    delivered** — exit code is non-zero until every FAIL is fixed.

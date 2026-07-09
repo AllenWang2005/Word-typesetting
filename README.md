@@ -40,7 +40,7 @@ the rules, a completion checklist, and a guardrail so nothing obvious slips thro
 - Headings left-aligned (title centered), no trailing punctuation, depth ≤ 3–4 levels; heading styles in `styles.xml` carry explicit fonts so WPS/Word cannot inherit the wrong typeface.
 
 **Tables, figures, formulas**
-- White three-line tables (top/bottom rules ~1.5 pt, header rule ~0.75 pt), content 五号/10.5 pt (one size below body) and centered, **caption above the table**, header row repeated across page breaks.
+- White three-line tables (top/bottom rules ~1.5 pt, header rule ~0.75 pt), content 五号/10.5 pt (one size below body) and centered, **caption above the table**, header row repeated across page breaks; OMML formulas inside normal data tables are also 五号, while body display formulas remain 小四.
 - Figures with **caption below**, by-chapter numbering (`图 1-1` / `表 2-3` / `(3-1)`), the "reference-before-appearance" rule.
 - Formulas authored as LaTeX and rendered to **native Word OMML** — variables italic, units/operators/functions upright; equation numbers right-aligned per chapter, cited as "由式 (3-1) 可得". For WPS-sensitive layouts, borderless 1×3 formula layout tables are treated as equation layout, not data tables.
 
@@ -135,7 +135,8 @@ with a `FAIL/WARN` summary, and notes any per-code truncation. Checks include:
 | `HEADING_STYLE_FONT` | FAIL | A used heading style lacks explicit Heiti/Songti fonts in `styles.xml` |
 | `HEADING_BOLD` | FAIL | Level-1/2 heading is bold, or level-3 heading is not bold |
 | `HEADING_NO_STYLE` | WARN | Heading-looking line that uses no Word heading style |
-| `TABLE_SIZE` | FAIL | Table text or in-table formula not 五号/10.5 pt (小四 ok; never larger than body) |
+| `TABLE_SIZE` | FAIL | Ordinary table text larger than body or not in the accepted table-text size range |
+| `TABLE_FORMULA_SIZE` | FAIL | In-table OMML formula/symbol not explicit 五号/10.5 pt (`w:sz=21`, `w:szCs=21`); body formulas stay 小四 |
 | `TABLE_BORDERS` | FAIL | Table has vertical/inner borders, incl. grids drawn by the referenced table style |
 | `TABLE_SHADING` | FAIL | Table/cell shading, direct or from the table style's `firstRow` format (three-line tables are white) |
 | `TABLE_RULES` | FAIL | Missing/wrong three-line rules: no visible top/bottom rules, row-to-row `insideH`, row-exception/cell-level body borders, or header rule not thinner |
@@ -177,7 +178,8 @@ punctuation/headings (this avoids false positives from numbers and short fragmen
 other byte of the package. Always on: full-width citation brackets (`［1］` → `[1]`)
 and ASCII sentence punctuation between CJK characters (`中文,中文` → `中文，中文`).
 Opt-in: `--units` (`20km` → `20 km`, `50 %` → `50%`), `--tables` (clear in-table
-shading, zero `w:tblLook`, repeat header rows across pages), `--update-fields`
+shading, zero `w:tblLook`, repeat header rows across pages, stamp OMML formulas
+inside normal data tables to 五号), `--update-fields`
 (MS Word refreshes TOC/REF fields on open), `--all`:
 
 ```text
@@ -202,7 +204,7 @@ python scripts/finalize_docx.py report.docx --no-fix   # audit only
 `scripts/replace_math.py` is the deterministic tool behind the formula rules: it
 converts LaTeX to native OMML (Pandoc, one batch) and splices each equation at the
 exact position of its plain-text original — cross-run tokens handled, surrounding
-characters preserved, font size stamped (`小四`/`五号`), display equations laid out
+characters preserved, font size stamped by context (body 小四, table 五号), display equations laid out
 with a center tab and a right-aligned number. Its JSON summary reports `not_found`
 and `still_plain_text`; both must be empty.
 

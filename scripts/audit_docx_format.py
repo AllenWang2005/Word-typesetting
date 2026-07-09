@@ -601,11 +601,11 @@ def audit_tables(root: ET.Element, issues: list[Issue], counts: Optional[dict[tu
     for table_index, table in enumerate(root.findall(".//w:tbl", NS), start=1):
         if is_formula_layout_table(table):
             continue
-        # Include OMML math runs (m:r) so in-table formulas/symbols are size-checked too,
-        # not just ordinary w:r text. Formula size is carried on w:rPr/w:sz inside m:r.
-        for run in table.findall(".//w:r", NS) + table.findall(".//m:r", NS):
+        # Ordinary table text is allowed to inherit size or use 五号/小四. OMML formulas
+        # are stricter: a math run inside a data table must be explicitly 五号 (w:sz=21),
+        # otherwise Word/WPS often leaves it at the body formula size 小四 (w:sz=24).
+        for run in table.findall(".//w:r", NS):
             text = "".join(node.text or "" for node in run.findall(".//w:t", NS))
-            text += "".join(node.text or "" for node in run.findall(".//m:t", NS))
             if not text.strip():
                 continue
             size = w_attr(run.find("w:rPr/w:sz", NS), "val")
@@ -620,8 +620,27 @@ def audit_tables(root: ET.Element, issues: list[Issue], counts: Optional[dict[tu
                         "TABLE_SIZE",
                         f"Table {table_index} has direct font size {value}; expected 五号/10.5 pt (w:sz=21; 小四/24 also accepted).",
                         counts,
-                    )
-                    break
+                )
+                break
+
+        for run in table.findall(".//m:r", NS):
+            text = "".join(node.text or "" for node in run.findall(".//m:t", NS))
+            if not text.strip():
+                continue
+            size = w_attr(run.find("w:rPr/w:sz", NS), "val")
+            size_cs = w_attr(run.find("w:rPr/w:szCs", NS), "val")
+            bad_values = [value or "missing" for value in (size, size_cs) if value != "21"]
+            if bad_values:
+                add_issue(
+                    issues,
+                    "FAIL",
+                    "TABLE_FORMULA_SIZE",
+                    f"Table {table_index} has an in-table formula run sized {', '.join(bad_values)}; "
+                    "table formulas/symbols must be 五号/10.5 pt (w:sz=21, w:szCs=21), "
+                    "while body formulas remain 小四/12 pt (w:sz=24).",
+                    counts,
+                )
+                break
 
 
 def audit_color(root: ET.Element, issues: list[Issue], counts: Optional[dict[tuple[str, str], int]] = None) -> None:
@@ -999,6 +1018,24 @@ def audit_table_rules(
                         counts,
                     )
                     break
+        for run in table.findall(".//m:r", NS):
+            text = "".join(node.text or "" for node in run.findall(".//m:t", NS))
+            if not text.strip():
+                continue
+            size = w_attr(run.find("w:rPr/w:sz", NS), "val")
+            size_cs = w_attr(run.find("w:rPr/w:szCs", NS), "val")
+            bad_values = [value or "missing" for value in (size, size_cs) if value != "21"]
+            if bad_values:
+                add_issue(
+                    issues,
+                    "FAIL",
+                    "TABLE_FORMULA_SIZE",
+                    f"Table {table_index} has an in-table formula run sized {', '.join(bad_values)}; "
+                    "table formulas/symbols must be 五号/10.5 pt (w:sz=21, w:szCs=21), "
+                    "while body formulas remain 小四/12 pt (w:sz=24).",
+                    counts,
+                )
+                break
             else:
                 continue
             break

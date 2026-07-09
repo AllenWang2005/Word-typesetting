@@ -3,6 +3,25 @@
 All notable changes to this skill are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and the project uses semantic versioning.
 
+## [1.6.3] - 2026-07-09
+
+### Fixed
+- Auditor: in-table OMML formulas and quantity symbols now have their own
+  `TABLE_FORMULA_SIZE` FAIL when they are missing an explicit size or still use
+  the body formula size. Normal data-table formulas must be 五号/10.5 pt
+  (`w:sz=21`, `w:szCs=21`), while body display formulas remain 小四/12 pt.
+
+### Changed
+- `replace_math.py` stamps formula size by replacement context when the registry
+  does not override `sz`: body formulas use 小四, and formulas replaced inside
+  table cells use 五号.
+- `normalize_docx.py --tables` and `finalize_docx.py` now mechanically fix
+  existing OMML formula runs inside normal data tables to 五号, while skipping
+  borderless 1-row formula layout tables so centered display equations keep
+  their body formula size.
+- Skill/reference/README guidance now separates ordinary table text size from
+  table formula size so the audit cannot pass a visually oversized table formula.
+
 ## [1.6.2] - 2026-07-08
 
 ### Fixed
@@ -146,6 +165,7 @@ paragraph ends as (italic) duplicates instead of replacing the original text in 
 ### Added
 - Initial release: the written standard (`SKILL.md` + `references/`), the `audit_docx_format.py` guardrail (punctuation, headings, fonts, captions, tables, citations, formulas; `--json` output and a FAIL/WARN summary), the `normalize_docx.py` safe auto-fixer, a non-compliant example, standard-library unit tests, and GitHub Actions CI.
 
+[1.6.3]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.6.3
 [1.6.2]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.6.2
 [1.6.1]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.6.1
 [1.6.0]: https://github.com/AllenWang2005/Word-typesetting/releases/tag/v1.6.0

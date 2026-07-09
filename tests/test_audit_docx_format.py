@@ -648,19 +648,47 @@ class TableSizeTests(unittest.TestCase):
         math_ns = "http://schemas.openxmlformats.org/officeDocument/2006/math"
         return ET.fromstring(
             f'<w:document xmlns:w="{W}" xmlns:m="{math_ns}"><w:body><w:tbl><w:tr><w:tc><w:p>'
-            f'<m:oMath><m:r><w:rPr><w:sz w:val="{sz}"/></w:rPr><m:t>x</m:t></m:r></m:oMath>'
+            f'<m:oMath><m:r><w:rPr><w:sz w:val="{sz}"/><w:szCs w:val="{sz}"/></w:rPr><m:t>x</m:t></m:r></m:oMath>'
             f'</w:p></w:tc></w:tr></w:tbl></w:body></w:document>'
         )
 
     def test_in_table_formula_oversized_flagged(self):
         issues = []
         aud.audit_tables(self._table_with_formula("28"), issues)  # 四号 formula in a table
-        self.assertIn("TABLE_SIZE", codes(issues))
+        self.assertIn("TABLE_FORMULA_SIZE", codes(issues))
 
     def test_in_table_formula_wuhao_ok(self):
         issues = []
         aud.audit_tables(self._table_with_formula("21"), issues)  # 五号 formula
-        self.assertNotIn("TABLE_SIZE", codes(issues))
+        self.assertNotIn("TABLE_FORMULA_SIZE", codes(issues))
+
+    def test_in_table_formula_xiaosi_flagged(self):
+        issues = []
+        aud.audit_tables(self._table_with_formula("24"), issues)  # 小四 body formula size in a table
+        self.assertIn("TABLE_FORMULA_SIZE", codes(issues))
+
+    def test_in_table_formula_missing_size_flagged(self):
+        root = make_doc(
+            '<w:tbl><w:tr><w:tc><w:p><m:oMath>'
+            '<m:r><m:t>Q</m:t></m:r>'
+            '</m:oMath></w:p></w:tc></w:tr></w:tbl>'
+        )
+        issues = []
+        aud.audit_tables(root, issues)
+        self.assertIn("TABLE_FORMULA_SIZE", codes(issues))
+
+    def test_formula_layout_table_body_size_not_flagged_as_table_formula(self):
+        root = make_doc(
+            '<w:tbl><w:tr>'
+            '<w:tc><w:p/></w:tc>'
+            '<w:tc><w:p><m:oMath><m:r><w:rPr><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>'
+            '<m:t>F</m:t></m:r></m:oMath></w:p></w:tc>'
+            '<w:tc><w:p><w:r><w:t>(3-1)</w:t></w:r></w:p></w:tc>'
+            '</w:tr></w:tbl>'
+        )
+        issues = []
+        aud.audit_tables(root, issues)
+        self.assertNotIn("TABLE_FORMULA_SIZE", codes(issues))
 
 
 class ColorTests(unittest.TestCase):

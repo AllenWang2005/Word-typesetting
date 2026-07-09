@@ -119,6 +119,42 @@ class TableHygieneFixTests(unittest.TestCase):
         self.assertIn("FFFF00", out)
         self.assertEqual(counts["shading_cleared"], 0)
 
+    def test_in_table_formula_size_set_to_wuhao(self):
+        xml = (
+            '<w:tbl><w:tr><w:tc><w:p><m:oMath>'
+            '<m:r><w:rPr><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><m:t>Q</m:t></m:r>'
+            '</m:oMath></w:p></w:tc></w:tr></w:tbl>'
+        )
+        out, counts = norm.fix_table_hygiene(xml)
+        self.assertIn('<w:sz w:val="21"/>', out)
+        self.assertIn('<w:szCs w:val="21"/>', out)
+        self.assertNotIn('w:val="24"', out)
+        self.assertEqual(counts["table_formula_size_fixed"], 1)
+
+    def test_in_table_formula_missing_size_gets_wuhao(self):
+        xml = (
+            '<w:tbl><w:tr><w:tc><w:p><m:oMath>'
+            '<m:r><m:rPr><m:sty m:val="p"/></m:rPr><m:t>Q</m:t></m:r>'
+            '</m:oMath></w:p></w:tc></w:tr></w:tbl>'
+        )
+        out, counts = norm.fix_table_hygiene(xml)
+        self.assertIn('<w:rPr><w:sz w:val="21"/><w:szCs w:val="21"/></w:rPr>', out)
+        self.assertEqual(counts["table_formula_size_fixed"], 1)
+
+    def test_formula_layout_table_keeps_body_formula_size(self):
+        xml = (
+            '<w:tbl><w:tr>'
+            '<w:tc><w:p/></w:tc>'
+            '<w:tc><w:p><m:oMath>'
+            '<m:r><w:rPr><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><m:t>F</m:t></m:r>'
+            '</m:oMath></w:p></w:tc>'
+            '<w:tc><w:p><w:r><w:t>(3-1)</w:t></w:r></w:p></w:tc>'
+            '</w:tr></w:tbl>'
+        )
+        out, counts = norm.fix_table_hygiene(xml)
+        self.assertIn('w:val="24"', out)
+        self.assertEqual(counts["table_formula_size_fixed"], 0)
+
 
 class UpdateFieldsFixTests(unittest.TestCase):
     def test_updatefields_inserted(self):

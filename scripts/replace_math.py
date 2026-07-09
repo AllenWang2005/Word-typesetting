@@ -24,8 +24,9 @@ Entry fields:
              equation line (left-aligned, center tab for the equation, right
              tab for the number). Default false (inline).
     number   display only: right-aligned equation number text, e.g. "(3-1)".
-    sz       font size in half-points stamped onto the equation runs
-             (24 = 小四 body, 21 = 五号 table). Default: --default-sz (24).
+    sz       optional font size in half-points stamped onto the equation runs.
+             When omitted, body formulas use --default-sz (24=小四) and formulas
+             replaced inside table cells use 21 (五号).
 
 Usage:
     python scripts/replace_math.py report.docx registry.json -o out.docx
@@ -268,6 +269,14 @@ def make_display_paragraph(
         paragraph.append(number_run)
 
 
+def math_for_context(entry: dict, in_table: bool, default_sz: int) -> ET.Element:
+    """Return a fresh OMML copy stamped for the target paragraph's context."""
+    omath = copy.deepcopy(entry["_omath"])
+    sz = int(entry.get("sz", 21 if in_table else default_sz))
+    stamp_font_size(omath, sz)
+    return omath
+
+
 def apply_registry(document_xml: str, registry: list[dict], default_sz: int) -> tuple[str, dict]:
     register_namespaces(document_xml)
     root_tag_match = ROOT_TAG_RE.search(document_xml)
@@ -287,19 +296,20 @@ def apply_registry(document_xml: str, registry: list[dict], default_sz: int) -> 
             entry["_omath"] = fragment if fragment.tag == f"{M}oMath" else fragment.find("m:oMath", NS)
             if entry["_omath"] is None:
                 raise ReplaceMathError(f"Entry '{entry['find']}': omml must contain an <m:oMath> element.")
-        stamp_font_size(entry["_omath"], int(entry.get("sz", default_sz)))
 
     counts = {entry["find"]: 0 for entry in registry}
     paragraphs = root.findall(".//w:p", NS)
+    table_paragraph_ids = {id(p) for table in root.findall(".//w:tbl", NS) for p in table.findall(".//w:p", NS)}
     for entry in registry:
         token = entry["find"]
         for paragraph in paragraphs:
+            omath = math_for_context(entry, id(paragraph) in table_paragraph_ids, default_sz)
             if bool(entry.get("display")):
                 if paragraph_plain_text(paragraph).strip() == token.strip() and paragraph.find(".//m:oMath", NS) is None:
-                    make_display_paragraph(paragraph, entry["_omath"], entry.get("number"), width)
+                    make_display_paragraph(paragraph, omath, entry.get("number"), width)
                     counts[token] += 1
             else:
-                counts[token] += replace_inline(paragraph, token, entry["_omath"])
+                counts[token] += replace_inline(paragraph, token, omath)
 
     leftovers = []
     for entry in registry:

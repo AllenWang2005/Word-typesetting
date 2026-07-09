@@ -55,8 +55,10 @@ the whole convert-and-splice as one deterministic operation:
 
 1. Run the discovery pass and write the registry as JSON — one entry per distinct
    token: `{"find": "<exact original text>", "latex": "<LaTeX>"}`, plus
-   `"sz": 21` for in-table occurrences, `"display": true, "number": "(3-1)"`
-   for display equations (the token must then be the whole paragraph).
+   `"display": true, "number": "(3-1)"` for display equations (the token must then be
+   the whole paragraph). You may set `"sz"` explicitly, but normally omit it:
+   the script stamps body formulas as 小四 (`24`) and in-table formulas as 五号 (`21`)
+   based on the replacement location.
 2. Run `python scripts/replace_math.py report.docx registry.json --in-place`.
    The script converts every LaTeX entry with Pandoc in one batch, splices each
    OMML object at the token's exact position (in-place contract enforced by
@@ -79,7 +81,7 @@ When the script cannot be used, prefer this pipeline for DOCX work:
 2. Store the LaTeX source in the formula registry. Use `$...$` for inline math and `$$...$$` or display blocks for display math.
 3. Convert LaTeX fragments to Word OMML with a reliable converter, preferably Pandoc-generated DOCX, then extract the resulting `<m:oMath>` or `<m:oMathPara>` XML.
 4. Replace placeholders in the target DOCX with the converted OMML XML **at the placeholder's exact position** (see the In-Place Replacement Contract). Inline symbols use inline `<m:oMath>`; display formulas use a centered equation paragraph and, when needed, a right-aligned equation number.
-5. Set the OMML run font size to match the surrounding context: body formulas at the body size (小四, `w:sz=24`), formulas inside a table at the table size (五号, `w:sz=21`). Do not leave an in-table formula at the body's 小四 — it must match the 五号 table text.
+5. Set the OMML run font size to match the surrounding context: body formulas at the body size (小四, `w:sz=24`), formulas inside a table at the table size (五号, `w:sz=21` and `w:szCs=21`). Do not leave an in-table formula at the body's 小四 — it must match the 五号 table text.
 6. Verify that no placeholder, visible LaTeX source, formula image, plain-text substitute, or duplicated plain-text original remains.
 
 When Pandoc is unavailable, use another route that still produces native Word OMML, such as Word's equation conversion or an OMML-capable library. Do not fall back to styled normal text unless the user explicitly accepts a non-compliant visual-only draft.
@@ -109,6 +111,7 @@ After editing the DOCX:
 - Search for placeholders like `@@MATH_`, visible LaTeX commands such as `\frac`, and obvious plain-text equations such as `Q =` or `N_p =`.
 - Check for append-instead-of-replace damage: no paragraph may contain both an OMML object and the same expression as plain text, and no paragraph may end with a trailing cluster of math objects or stray fragments (`mm，Cv`) that repeat values already in the prose (auditor: `MATH_DUPLICATE`).
 - Check that variables are italic and non-variables are upright in the rendered Word output.
+- Check that formula font sizes are context-aware: body formulas are 小四 (`w:sz=24`), while OMML formulas/symbols in ordinary data tables are 五号 (`w:sz=21`, `w:szCs=21`). The auditor reports `TABLE_FORMULA_SIZE` as FAIL when table formulas keep body size.
 - Check that display equations visibly have the formula centered and the number right-aligned. If a tab-stop layout drifts in WPS, convert that equation line to the 1×3 formula layout table instead of centering the paragraph.
 - Render/export to PDF or page images and inspect formula baseline, line height, equation numbering, and table-cell formula fit.
 - If `scripts/audit_docx_format.py` reports formula warnings/failures, revise or explicitly explain why an item is intentionally not mathematical.

@@ -127,7 +127,8 @@ python scripts/audit_docx_format.py path/to/report.docx --json   # 机器可读
 | `HEADING_STYLE_FONT` | FAIL | 已使用的标题样式在 `styles.xml` 中没有显式黑体/宋体字体 |
 | `HEADING_BOLD` | FAIL | 一二级标题被加粗,或三级标题没有加粗 |
 | `HEADING_NO_STYLE` | WARN | 看着像标题但没用 Word 标题样式 |
-| `TABLE_SIZE` | FAIL | 表内文字或表内公式非五号/10.5 pt(小四亦可;不得大于正文) |
+| `TABLE_SIZE` | FAIL | 普通表内文字字号不在允许范围内，或大于正文 |
+| `TABLE_FORMULA_SIZE` | FAIL | 表内 OMML 公式/量符号未显式设为五号/10.5 pt(`w:sz=21`,`w:szCs=21`);正文公式仍为小四 |
 | `TABLE_BORDERS` | FAIL | 表格有竖线/内部网格,含引用的表格样式画出来的网格 |
 | `TABLE_SHADING` | FAIL | 表格/单元格带底纹,含表格样式 `firstRow` 条件格式带来的表头底纹(三线表必须白底) |
 | `TABLE_RULES` | FAIL | 三线不对:顶/底线缺失、行间横线（含 `tblPrEx` 行级例外边框和表体单元格逐行底边线）、或表头下线不比顶/底线细 |
@@ -161,7 +162,7 @@ python scripts/audit_docx_format.py path/to/report.docx --json   # 机器可读
 
 ## 自动修复脚本
 
-`scripts/normalize_docx.py` 机械修复安全问题,其余字节原样保留。默认开启:全角引用括号(`［1］` → `[1]`)和 CJK 之间误用的 ASCII 句读(`中文,中文` → `中文，中文`)。可选开关:`--units`(`20km` → `20 km`、`50 %` → `50%`)、`--tables`(清表内底纹、归零 `w:tblLook`、表头行跨页重复)、`--update-fields`(让 MS Word 打开时自动刷新 TOC/REF 域)、`--all`:
+`scripts/normalize_docx.py` 机械修复安全问题,其余字节原样保留。默认开启:全角引用括号(`［1］` → `[1]`)和 CJK 之间误用的 ASCII 句读(`中文,中文` → `中文，中文`)。可选开关:`--units`(`20km` → `20 km`、`50 %` → `50%`)、`--tables`(清表内底纹、归零 `w:tblLook`、表头行跨页重复、普通数据表内 OMML 公式盖成五号)、`--update-fields`(让 MS Word 打开时自动刷新 TOC/REF 域)、`--all`:
 
 ```text
 python scripts/normalize_docx.py report.docx -o report.fixed.docx
@@ -181,7 +182,7 @@ python scripts/finalize_docx.py report.docx --no-fix   # 只审计不改文件
 
 ## 公式替换脚本
 
-`scripts/replace_math.py` 是公式规则背后的确定性工具:把 LaTeX 批量转换为原生 OMML(Pandoc),并把每条公式**拼接到纯文本原文的确切位置**——跨 run 的 token 也能处理,前后字符原样保留,自动盖上字号(小四/五号),display 公式自动排成"居中制表位 + 右对齐编号"版式。输出的 JSON 摘要里 `not_found` 与 `still_plain_text` 必须为空:
+`scripts/replace_math.py` 是公式规则背后的确定性工具:把 LaTeX 批量转换为原生 OMML(Pandoc),并把每条公式**拼接到纯文本原文的确切位置**——跨 run 的 token 也能处理,前后字符原样保留,按上下文自动盖上字号(正文小四、表内五号),display 公式自动排成"居中制表位 + 右对齐编号"版式。输出的 JSON 摘要里 `not_found` 与 `still_plain_text` 必须为空:
 
 ```text
 python scripts/replace_math.py report.docx registry.json --in-place

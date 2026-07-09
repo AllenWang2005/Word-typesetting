@@ -20,22 +20,25 @@ Opt-in fixes:
                      (``20km`` -> ``20 km``) and remove the space before ``%`` /
                      ``°`` / ``℃`` (``50 %`` -> ``50%``), inside w:t text only.
 ``--tables``         white three-line hygiene: clear every ``w:shd`` inside
-                     tables to ``clear/auto``, zero the ``w:tblLook``
-                     conditional-formatting flags, clear row-level exception
-                     borders (``w:tblPrEx/w:tblBorders``), and mark the first row of
-                     every multi-row table to repeat across pages
-                     (``w:tblHeader``). Borders are NOT touched — set them per
-                     ``references/three-line-table-ooxml.md``.
-                     Row-level exception borders are cleared because they are
-                     inherited grid artifacts, not intentional three-line rules.
+                      tables to ``clear/auto``, zero the ``w:tblLook``
+                      conditional-formatting flags, clear row-level exception
+                      borders (``w:tblPrEx/w:tblBorders``), and mark the first row of
+                      every multi-row table to repeat across pages
+                      (``w:tblHeader``). Borders are NOT touched — set them per
+                      ``references/three-line-table-ooxml.md``.
+                      Row-level exception borders are cleared because they are
+                      inherited grid artifacts, not intentional three-line rules.
+                      OMML formula runs inside normal data tables are stamped to
+                      五号/10.5 pt (``w:sz=21``); body formulas stay 小四/12 pt.
 ``--update-fields``  set ``w:updateFields`` in word/settings.xml so MS Word
                      (the canonical renderer) refreshes TOC/REF fields on open.
 ``--all``            all of the above.
 
-It does NOT touch fonts, styles, formulas, or citation cross-references — those
-need judgement and belong to the model + the main standard (use
-``scripts/replace_math.py`` for formulas). By default it writes a new
-``*.normalized.docx`` file and leaves the input untouched.
+It does NOT touch fonts, styles, formula semantics, or citation cross-references
+— those need judgement and belong to the model + the main standard (use
+``scripts/replace_math.py`` for formula conversion). The only formula formatting
+it changes is the safe table-context size stamp above. By default it writes a
+new ``*.normalized.docx`` file and leaves the input untouched.
 
 Known limitation: the punctuation fix works on raw XML, so a CJK character and
 its punctuation split across two runs are not matched.
@@ -65,6 +68,15 @@ TBLLOOK_RE = re.compile(r"<w:tblLook\b[^>]*/>")
 TBLPREX_RE = re.compile(r"<w:tblPrEx\b[^>]*>.*?</w:tblPrEx>", re.S)
 TBLPREX_BORDERS_RE = re.compile(r"<w:tblBorders\b[^>]*>.*?</w:tblBorders>", re.S)
 TR_OPEN_RE = re.compile(r"<w:tr(?:\s[^>]*)?>")
+TC_OPEN_RE = re.compile(r"<w:tc(?:\s[^>]*)?>")
+MATH_RUN_RE = re.compile(r"<m:r\b[^>]*>.*?</m:r>", re.S)
+WRPR_RE = re.compile(r"<w:rPr\b[^>]*>.*?</w:rPr>", re.S)
+WSZ_RE = re.compile(r"<w:sz\b[^>]*/>")
+WSZCS_RE = re.compile(r"<w:szCs\b[^>]*/>")
+MR_OPEN_RE = re.compile(r"<m:r\b[^>]*>")
+MRPR_RE = re.compile(r"<m:rPr\b[^>]*>.*?</m:rPr>", re.S)
+TAG_RE = re.compile(r"<[^>]+>")
+EQUATION_NUMBER_RE = re.compile(r"[(（]\s*(?:式\s*)?\d+\s*[-–—]\s*\d+\s*[)）]")
 UNIT_GLUE_RE = re.compile(r"(\d)(km|mm|cm|kg|kN|kPa|MPa|kW|MW|kV|Hz|min)(?![A-Za-z])")
 UNIT_GLUE_M_RE = re.compile(r"(\d)(m)(?=[²³/])")
 SPACE_BEFORE_UNIT_RE = re.compile(r"(\d)[  　\t]+(%|℃|°C|°(?![CF]))")
@@ -74,6 +86,8 @@ ZERO_TBLLOOK = (
     '<w:tblLook w:val="0000" w:firstRow="0" w:lastRow="0" w:firstColumn="0" '
     'w:lastColumn="0" w:noHBand="1" w:noVBand="1"/>'
 )
+TABLE_FORMULA_SZ = '<w:sz w:val="21"/>'
+TABLE_FORMULA_SZCS = '<w:szCs w:val="21"/>'
 
 
 def normalize_document_xml(xml: str) -> tuple[str, dict[str, int]]:
@@ -118,7 +132,49 @@ def fix_table_hygiene(xml: str) -> tuple[str, dict[str, int]]:
         "tbllook_zeroed": 0,
         "row_exception_borders_cleared": 0,
         "header_repeat_added": 0,
+        "table_formula_size_fixed": 0,
     }
+
+    def is_formula_layout_table(block: str) -> bool:
+        # 1x2/1x3 equation-layout helper tables are not data tables; their
+        # display formulas should remain body-sized.
+        if len(TR_OPEN_RE.findall(block)) != 1 or len(TC_OPEN_RE.findall(block)) not in (2, 3):
+            return False
+        if "<m:oMath" not in block:
+            return False
+        text = TAG_RE.sub("", block)
+        return bool(EQUATION_NUMBER_RE.search(text))
+
+    def fix_math_run_size(match: "re.Match[str]") -> str:
+        run = match.group(0)
+        original = run
+
+        def fix_rpr(match: "re.Match[str]") -> str:
+            rpr = match.group(0)
+            if WSZ_RE.search(rpr):
+                rpr = WSZ_RE.sub(TABLE_FORMULA_SZ, rpr, count=1)
+            else:
+                rpr = rpr.replace("</w:rPr>", TABLE_FORMULA_SZ + "</w:rPr>", 1)
+            if WSZCS_RE.search(rpr):
+                rpr = WSZCS_RE.sub(TABLE_FORMULA_SZCS, rpr, count=1)
+            else:
+                rpr = rpr.replace("</w:rPr>", TABLE_FORMULA_SZCS + "</w:rPr>", 1)
+            return rpr
+
+        if WRPR_RE.search(run):
+            run = WRPR_RE.sub(fix_rpr, run, count=1)
+        else:
+            insert = f"<w:rPr>{TABLE_FORMULA_SZ}{TABLE_FORMULA_SZCS}</w:rPr>"
+            m_rpr = MRPR_RE.search(run)
+            if m_rpr:
+                run = run[: m_rpr.end()] + insert + run[m_rpr.end() :]
+            else:
+                opener = MR_OPEN_RE.search(run)
+                if opener:
+                    run = run[: opener.end()] + insert + run[opener.end() :]
+        if run != original:
+            counts["table_formula_size_fixed"] += 1
+        return run
 
     def process_table(match: "re.Match[str]") -> str:
         block = match.group(0)
@@ -137,6 +193,8 @@ def fix_table_hygiene(xml: str) -> tuple[str, dict[str, int]]:
 
         block = SHD_RE.sub(clear_shd, block)
         block = TBLLOOK_RE.sub(zero_look, block)
+        if not is_formula_layout_table(block):
+            block = MATH_RUN_RE.sub(fix_math_run_size, block)
 
         def clear_row_exception_borders(m: "re.Match[str]") -> str:
             cleaned, removed = TBLPREX_BORDERS_RE.subn("", m.group(0))
